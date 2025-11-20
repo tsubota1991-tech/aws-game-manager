@@ -68,9 +68,9 @@ public class DataInitializer implements CommandLineRunner {
         if (cloudAccountRepository.count() == 0) {
             CloudAccount mainAws = new CloudAccount();
             mainAws.setName("メインAWSアカウント");
-            mainAws.setAccessKeyId("DUMMY_ACCESS_KEY");
-            mainAws.setSecretAccessKey("DUMMY_SECRET_KEY");
-            mainAws.setRegion("ap-northeast-1");
+            mainAws.setAwsAccessKeyId("AK2222AOGP2222XHWFNZ");
+            mainAws.setAwsSecretAccessKey("xPPPdb0EzQ6rv77OAueQUFXq911oGbPMD8PPfLvb");
+            mainAws.setDefaultRegion("ap-northeast-1");
             mainAws.setMemo("ローカル開発用ダミーアカウント情報（本番では差し替え）");
 
             mainAws = cloudAccountRepository.save(mainAws);
@@ -98,13 +98,18 @@ public class DataInitializer implements CommandLineRunner {
             server.setName("7DTD テストサーバ");
             server.setGameType("7dtd");
             server.setCloudAccount(account);
-            server.setRegion(account.getRegion());
-            server.setEc2InstanceId("i-0123456789abcdef0");
+            server.setRegion(account.getDefaultRegion());
+            server.setEc2InstanceId("i-0e4de3c48b0419999");
             server.setPort(26900);
-            server.setDescription("ローカル開発用のダミーGameServer");
+            server.setDescription("ローカル開発用の7DTDテストサーバ");
             server.setLastStatus("UNKNOWN");
 
+            // ★ ここで EC2 内のスクリプトパスを設定
+            server.setStartScriptPath("/home/ubuntu/7dtd/startserver.sh");
+            server.setBackupScriptPath("/home/ubuntu/backup_7dtd.sh");
+
             server = gameServerRepository.save(server);
+
 
             System.out.println("=== 初期GameServerを作成しました ===");
             System.out.println("  id   : " + server.getId());

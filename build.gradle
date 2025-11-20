@@ -24,6 +24,13 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
+
+    // ★ AWS SDK（EC2クライアント）
+    // 2025-11-16 時点の最新版
+    implementation 'software.amazon.awssdk:ec2:2.38.7'
+    // SSM クライアント
+    implementation 'software.amazon.awssdk:ssm:2.38.7'
+    
     runtimeOnly 'com.h2database:h2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

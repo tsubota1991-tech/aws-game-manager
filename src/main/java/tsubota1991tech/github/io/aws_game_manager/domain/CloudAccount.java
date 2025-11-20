@@ -7,6 +7,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+/**
+ * AWSなどのクラウドアカウント情報
+ */
 @Entity
 @Table(name = "cloud_accounts")
 public class CloudAccount {
@@ -15,37 +18,73 @@ public class CloudAccount {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** 任意の表示名（例: メインAWSアカウント） */
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "access_key_id", nullable = false, length = 100)
-    private String accessKeyId;
+    /** AWS Access Key ID */
+    @Column(name = "aws_access_key_id", length = 100)
+    private String awsAccessKeyId;
 
-    @Column(name = "secret_access_key", nullable = false, length = 200)
-    private String secretAccessKey;
+    /** AWS Secret Access Key */
+    @Column(name = "aws_secret_access_key", length = 200)
+    private String awsSecretAccessKey;
 
-    @Column(nullable = false, length = 50)
-    private String region;
+    /** デフォルトリージョン (例: ap-northeast-1) */
+    @Column(name = "default_region", length = 50)
+    private String defaultRegion;
 
-    @Column(length = 500)
+    /** メモ */
+    @Column(length = 255)
     private String memo;
 
-    // getter / setter
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    // ====== getter / setter ======
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getAccessKeyId() { return accessKeyId; }
-    public void setAccessKeyId(String accessKeyId) { this.accessKeyId = accessKeyId; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getSecretAccessKey() { return secretAccessKey; }
-    public void setSecretAccessKey(String secretAccessKey) { this.secretAccessKey = secretAccessKey; }
+    public String getName() {
+        return name;
+    }
 
-    public String getRegion() { return region; }
-    public void setRegion(String region) { this.region = region; }
+    public void setName(String name) {
+        this.name = name;
+    }
 
-    public String getMemo() { return memo; }
-    public void setMemo(String memo) { this.memo = memo; }
+    public String getAwsAccessKeyId() {
+        return awsAccessKeyId;
+    }
+
+    public void setAwsAccessKeyId(String awsAccessKeyId) {
+        this.awsAccessKeyId = awsAccessKeyId;
+    }
+
+    public String getAwsSecretAccessKey() {
+        return awsSecretAccessKey;
+    }
+
+    public void setAwsSecretAccessKey(String awsSecretAccessKey) {
+        this.awsSecretAccessKey = awsSecretAccessKey;
+    }
+
+    public String getDefaultRegion() {
+        return defaultRegion;
+    }
+
+    public void setDefaultRegion(String defaultRegion) {
+        this.defaultRegion = defaultRegion;
+    }
+
+    public String getMemo() {
+        return memo;
+    }
+
+    public void setMemo(String memo) {
+        this.memo = memo;
+    }
 }

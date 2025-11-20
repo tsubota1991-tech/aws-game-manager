@@ -22,38 +22,41 @@ public class GameServer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** サーバ表示名（例：7DTD本番、Minecraftテスト など） */
-    @Column(nullable = false, length = 100)
+    // 基本情報
     private String name;
-
-    /** ゲーム種別（例：7dtd, minecraft など） */
-    @Column(name = "game_type", nullable = false, length = 50)
+    private String description;
     private String gameType;
-
-    /** 利用するクラウドアカウント（AWS） */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cloud_account_id", nullable = false)
-    private CloudAccount cloudAccount;
-
-    /** リージョン（CloudAccount と同じでもよいが、個別指定も許可） */
-    @Column(nullable = false, length = 50)
     private String region;
-
-    /** EC2 インスタンスID（例：i-0123456789abcdef0） */
-    @Column(name = "ec2_instance_id", nullable = false, length = 50)
+    private Integer port;
     private String ec2InstanceId;
 
-    /** 接続ポート番号（例：26900） */
-    @Column(nullable = false)
-    private Integer port;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cloud_account_id")
+    private CloudAccount cloudAccount;
 
-    /** 説明・メモ */
-    @Column(length = 500)
-    private String description;
-
-    /** 最終状態（起動中 / 停止中 など） */
-    @Column(name = "last_status", length = 50)
+    @Column(length = 100)
     private String lastStatus;
+
+    // // ▼ 既存: ローカルPC側のバッチなどを紐付ける想定
+    // @Column(length = 255)
+    // private String localStartScriptPath;   // 例: C:\\scripts\\7dtd_start.bat
+
+    // @Column(length = 255)
+    // private String localStopScriptPath;    // 例: C:\\scripts\\7dtd_stop.bat
+
+    // ▼ 既存: EC2 の現在の接続情報
+    @Column(length = 100)
+    private String publicIp;               // 例: 18.xxx.xxx.xxx
+
+    @Column(length = 255)
+    private String publicDns;              // 例: ec2-18-xxx-xxx-xxx.ap-northeast-1.compute.amazonaws.com
+
+    // ▼ 追加: EC2 内にあるスクリプトのパス
+    @Column(length = 255)
+    private String startScriptPath;        // 例: /home/ubuntu/7dtd/startserver.sh
+
+    @Column(length = 255)
+    private String backupScriptPath;       // 例: /home/ubuntu/backup_7dtd.sh
 
     // ===== getter / setter =====
 
@@ -127,5 +130,53 @@ public class GameServer {
 
     public void setLastStatus(String lastStatus) {
         this.lastStatus = lastStatus;
+    }
+
+    // public String getLocalStartScriptPath() {
+    //     return localStartScriptPath;
+    // }
+
+    // public void setLocalStartScriptPath(String localStartScriptPath) {
+    //     this.localStartScriptPath = localStartScriptPath;
+    // }
+
+    // public String getLocalStopScriptPath() {
+    //     return localStopScriptPath;
+    // }
+
+    // public void setLocalStopScriptPath(String localStopScriptPath) {
+    //     this.localStopScriptPath = localStopScriptPath;
+    // }
+
+    public String getPublicIp() {
+        return publicIp;
+    }
+
+    public void setPublicIp(String publicIp) {
+        this.publicIp = publicIp;
+    }
+
+    public String getPublicDns() {
+        return publicDns;
+    }
+
+    public void setPublicDns(String publicDns) {
+        this.publicDns = publicDns;
+    }
+
+    public String getStartScriptPath() {
+        return startScriptPath;
+    }
+
+    public void setStartScriptPath(String startScriptPath) {
+        this.startScriptPath = startScriptPath;
+    }
+
+    public String getBackupScriptPath() {
+        return backupScriptPath;
+    }
+
+    public void setBackupScriptPath(String backupScriptPath) {
+        this.backupScriptPath = backupScriptPath;
     }
 }
