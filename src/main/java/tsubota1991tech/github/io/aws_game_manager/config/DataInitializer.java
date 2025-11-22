@@ -10,6 +10,7 @@ import tsubota1991tech.github.io.aws_game_manager.domain.GameServer;
 import tsubota1991tech.github.io.aws_game_manager.repository.AppUserRepository;
 import tsubota1991tech.github.io.aws_game_manager.repository.CloudAccountRepository;
 import tsubota1991tech.github.io.aws_game_manager.repository.GameServerRepository;
+import tsubota1991tech.github.io.aws_game_manager.service.SystemSettingService;
 
 /**
  * アプリ起動時に初期データを投入するクラス。
@@ -25,21 +26,25 @@ public class DataInitializer implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final CloudAccountRepository cloudAccountRepository;
     private final GameServerRepository gameServerRepository;
+    private final SystemSettingService systemSettingService;
 
     public DataInitializer(AppUserRepository appUserRepository,
                            PasswordEncoder passwordEncoder,
                            CloudAccountRepository cloudAccountRepository,
-                           GameServerRepository gameServerRepository) {
+                           GameServerRepository gameServerRepository,
+                           SystemSettingService systemSettingService) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.cloudAccountRepository = cloudAccountRepository;
         this.gameServerRepository = gameServerRepository;
+        this.systemSettingService = systemSettingService;
     }
 
     @Override
     public void run(String... args) throws Exception {
         initAdminUser();
         initCloudAccountsAndGameServers();
+        initSystemSettings();
     }
 
     /** 管理者ユーザが居なければ作成 */
@@ -117,5 +122,9 @@ public class DataInitializer implements CommandLineRunner {
         } else {
             System.out.println("GameServer は既に登録されています。");
         }
+    }
+
+    private void initSystemSettings() {
+        systemSettingService.ensureSettingExists(SystemSettingService.DISCORD_BOT_TOKEN_KEY, "");
     }
 }
