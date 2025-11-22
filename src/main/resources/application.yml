@@ -1,3 +1,7 @@
 discord:
   bot:
     api-token: ""
+
+app:
+  encryption:
+    secret: ${APP_ENCRYPTION_SECRET:}

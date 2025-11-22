@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 
 import tsubota1991tech.github.io.aws_game_manager.domain.SystemSetting;
 import tsubota1991tech.github.io.aws_game_manager.repository.SystemSettingRepository;
+import tsubota1991tech.github.io.aws_game_manager.security.EncryptionService;
 
 @Service
 public class SystemSettingService {
@@ -15,9 +16,12 @@ public class SystemSettingService {
     public static final String DISCORD_BOT_TOKEN_KEY = "DISCORD_BOT_TOKEN";
 
     private final SystemSettingRepository systemSettingRepository;
+    private final EncryptionService encryptionService;
 
-    public SystemSettingService(SystemSettingRepository systemSettingRepository) {
+    public SystemSettingService(SystemSettingRepository systemSettingRepository,
+                               EncryptionService encryptionService) {
         this.systemSettingRepository = systemSettingRepository;
+        this.encryptionService = encryptionService;
     }
 
     @Transactional(readOnly = true)
@@ -27,7 +31,7 @@ public class SystemSettingService {
 
     @Transactional
     public void updateDiscordBotToken(String token) {
-        upsertSetting(DISCORD_BOT_TOKEN_KEY, token);
+        upsertSetting(DISCORD_BOT_TOKEN_KEY, encryptIfNeeded(token));
     }
 
     @Transactional
@@ -43,7 +47,7 @@ public class SystemSettingService {
 
     private String getSettingValue(String key) {
         Optional<SystemSetting> setting = systemSettingRepository.findBySettingKey(key);
-        return setting.map(SystemSetting::getSettingValue).orElse(null);
+        return setting.map(value -> decryptIfNeeded(value.getSettingValue())).orElse(null);
     }
 
     private void upsertSetting(String key, String value) {
@@ -58,5 +62,23 @@ public class SystemSettingService {
         }
 
         systemSettingRepository.save(setting);
+    }
+
+    private String encryptIfNeeded(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return encryptionService.encrypt(value.trim());
+    }
+
+    private String decryptIfNeeded(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        try {
+            return encryptionService.decrypt(value);
+        } catch (IllegalStateException ex) {
+            return value;
+        }
     }
 }

@@ -1,11 +1,13 @@
 package tsubota1991tech.github.io.aws_game_manager.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import tsubota1991tech.github.io.aws_game_manager.security.EncryptedStringConverter;
 
 /**
  * AWSなどのクラウドアカウント情報
@@ -27,7 +29,8 @@ public class CloudAccount {
     private String awsAccessKeyId;
 
     /** AWS Secret Access Key */
-    @Column(name = "aws_secret_access_key", length = 200)
+    @Column(name = "aws_secret_access_key", length = 512)
+    @Convert(converter = EncryptedStringConverter.class)
     private String awsSecretAccessKey;
 
     /** デフォルトリージョン (例: ap-northeast-1) */
