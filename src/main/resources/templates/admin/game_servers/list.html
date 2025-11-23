@@ -28,8 +28,14 @@
                 <li class="nav-item">
                     <a class="nav-link active" th:href="@{/admin/game-servers}">Game Servers</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/admin/system-settings}">System Settings</a>
+                </li>
             </ul>
             <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/profile}">プロフィール</a>
+                </li>
                 <li class="nav-item me-3">
                     <span class="navbar-text text-white">
                         <strong th:text="${#authentication.name}">user@example.com</strong>

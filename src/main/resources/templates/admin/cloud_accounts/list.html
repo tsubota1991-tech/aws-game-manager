@@ -20,6 +20,25 @@
                 <li class="nav-item">
                     <a class="nav-link" th:href="@{/admin/game-servers}">Game Servers</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/admin/system-settings}">System Settings</a>
+                </li>
+            </ul>
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/profile}">プロフィール</a>
+                </li>
+                <li class="nav-item me-3">
+                    <span class="navbar-text text-white">
+                        <strong th:text="${#authentication.name}">user@example.com</strong>
+                    </span>
+                </li>
+                <li class="nav-item">
+                    <form th:action="@{/logout}" method="post" class="d-inline">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+                        <button type="submit" class="btn btn-outline-light btn-sm">ログアウト</button>
+                    </form>
+                </li>
             </ul>
         </div>
     </div>
