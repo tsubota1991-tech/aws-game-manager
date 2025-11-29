@@ -157,7 +157,7 @@ public class GameServerController {
             gameServerService.startServer(id);
             redirectAttributes.addFlashAttribute("message", "サーバを起動しました。");
         } catch (GameServerOperationException ex) {
-            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+            redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
         }
         return "redirect:/admin/game-servers";
     }
@@ -169,7 +169,7 @@ public class GameServerController {
             gameServerService.stopServer(id);
             redirectAttributes.addFlashAttribute("message", "サーバを停止しました。");
         } catch (GameServerOperationException ex) {
-            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+            redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
         }
         return "redirect:/admin/game-servers";
     }
@@ -181,7 +181,7 @@ public class GameServerController {
             gameServerService.refreshStatus(id);
             redirectAttributes.addFlashAttribute("message", "ステータスを更新しました。");
         } catch (GameServerOperationException ex) {
-            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+            redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
         }
         return "redirect:/admin/game-servers";
     }
