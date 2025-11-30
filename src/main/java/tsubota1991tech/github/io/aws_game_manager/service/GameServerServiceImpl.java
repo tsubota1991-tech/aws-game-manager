@@ -191,9 +191,9 @@ public class GameServerServiceImpl implements GameServerService {
             );
         }
 
-        boolean backupOk;
+        AwsSsmService.SsmCommandResult backupResult;
         try {
-            backupOk = awsSsmService.runShellScriptAndWait(
+            backupResult = awsSsmService.runShellScriptAndWait(
                     account.getAwsAccessKeyId(),       // ★ 修正
                     account.getAwsSecretAccessKey(),   // ★ 修正
                     account.getDefaultRegion(),        // ★ 修正
@@ -203,16 +203,46 @@ public class GameServerServiceImpl implements GameServerService {
             );
         } catch (Exception ex) {
             log.error("[GameServerService] AwsSsmService threw exception", ex);
-            backupOk = false;
+            backupResult = new AwsSsmService.SsmCommandResult(
+                    false,
+                    null,
+                    null,
+                    null,
+                    ex.getMessage(),
+                    "sudo " + backupScriptPath
+            );
         }
 
-        log.info("[GameServerService] AwsSsmService result backupOk={}", backupOk);
+        log.info(
+                "[GameServerService] AwsSsmService result success={} commandId={} status={} stdout={} stderr={}",
+                backupResult.isSuccess(),
+                backupResult.getCommandId(),
+                backupResult.getFinalStatus(),
+                backupResult.getStandardOutput(),
+                backupResult.getStandardError()
+        );
 
-        if (!backupOk) {
+        if (!backupResult.isSuccess()) {
             server.setLastStatus("BACKUP FAILED");
             gameServerRepository.save(server);
+
+            StringBuilder msg = new StringBuilder();
+            msg.append("サーバ停止前バックアップに失敗しました。ラズパイ側のバッチログを確認してください。");
+            msg.append("\n実行コマンド: ").append(backupResult.getExecutedCommand());
+
+            if (backupResult.getCommandId() != null) {
+                msg.append("\nAWS Command ID: ").append(backupResult.getCommandId());
+            }
+
+            if (backupResult.getStandardOutput() != null && !backupResult.getStandardOutput().isBlank()) {
+                msg.append("\n--- stdout ---\n").append(backupResult.getStandardOutput());
+            }
+            if (backupResult.getStandardError() != null && !backupResult.getStandardError().isBlank()) {
+                msg.append("\n--- stderr ---\n").append(backupResult.getStandardError());
+            }
+
             throw new GameServerOperationException(
-                    "サーバ停止前バックアップに失敗しました。EC2 インスタンス上のログを確認してください。"
+                    msg.toString()
             );
         }
 

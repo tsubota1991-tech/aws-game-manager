@@ -54,7 +54,7 @@ public class AwsSsmService {
      * @param comment         AWS コンソール上に残すコメント（任意）
      * @return true: 成功 / false: 失敗
      */
-    public boolean runShellScriptAndWait(
+    public SsmCommandResult runShellScriptAndWait(
             String accessKeyId,
             String secretAccessKey,
             String regionName,
@@ -62,7 +62,9 @@ public class AwsSsmService {
             String scriptPath,
             String comment
     ) {
-        log.warn("[AwsSsmService] runShellScriptAndWait CALLED instanceId={} scriptPath={}", instanceId, scriptPath);
+        String command = "sudo " + scriptPath;
+
+        log.warn("[AwsSsmService] runShellScriptAndWait CALLED instanceId={} command={}", instanceId, command);
 
         try (SsmClient ssm = buildSsmClient(accessKeyId, secretAccessKey, regionName)) {
 
@@ -73,7 +75,7 @@ public class AwsSsmService {
                     .parameters(
                             Map.of(
                                     "commands",
-                                    List.of("sudo " + scriptPath)
+                                    List.of(command)
                             )
                     )
                     .comment(comment)
@@ -94,17 +96,26 @@ public class AwsSsmService {
             }
 
             // 2. 成否が確定するまでポーリング
-            return waitCommandSuccess(ssm, commandId, instanceId);
+            return waitCommandResult(ssm, commandId, instanceId, command);
 
         } catch (SsmException e) {
             log.error("[AwsSsmService] SSM command error: {}", e.getMessage(), e);
-            return false;
+            return new SsmCommandResult(false, null, null, null, e.getMessage(), command);
         }
     }
 
-    private boolean waitCommandSuccess(SsmClient ssm, String commandId, String instanceId) {
+    private SsmCommandResult waitCommandResult(
+            SsmClient ssm,
+            String commandId,
+            String instanceId,
+            String executedCommand
+    ) {
         int maxAttempts = 60; // 10 秒 × 60 回 = 最大 10 分
         Duration sleep = Duration.ofSeconds(10);
+
+        String latestStdout = "";
+        String latestStderr = "";
+        CommandInvocationStatus latestStatus = null;
 
         for (int i = 0; i < maxAttempts; i++) {
             try {
@@ -116,16 +127,34 @@ public class AwsSsmService {
                 GetCommandInvocationResponse res = ssm.getCommandInvocation(getReq);
                 CommandInvocationStatus status = res.status();
 
+                latestStatus = status;
+                latestStdout = res.standardOutputContent();
+                latestStderr = res.standardErrorContent();
+
                 log.info("[AwsSsmService] status={} stdout={} stderr={}",
                         status, res.standardOutputContent(), res.standardErrorContent());
 
                 switch (status) {
                     case SUCCESS:
-                        return true;
+                        return new SsmCommandResult(
+                                true,
+                                commandId,
+                                status,
+                                latestStdout,
+                                latestStderr,
+                                executedCommand
+                        );
                     case FAILED:
                     case TIMED_OUT:
                     case CANCELLED:
-                        return false;
+                        return new SsmCommandResult(
+                                false,
+                                commandId,
+                                status,
+                                latestStdout,
+                                latestStderr,
+                                executedCommand
+                        );
                     default:
                         // Pending / InProgress の場合は待機して再試行
                 }
@@ -142,19 +171,68 @@ public class AwsSsmService {
                     Thread.sleep(sleep.toMillis());
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    return false;
+                    return new SsmCommandResult(false, commandId, latestStatus, latestStdout, "Interrupted", executedCommand);
                 }
             } catch (SsmException e) {
                 log.error("[AwsSsmService] getCommandInvocation error: {}", e.getMessage(), e);
-                return false;
+                return new SsmCommandResult(false, commandId, latestStatus, latestStdout, e.getMessage(), executedCommand);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return false;
+                return new SsmCommandResult(false, commandId, latestStatus, latestStdout, "Interrupted", executedCommand);
             }
         }
 
         log.error("[AwsSsmService] SSM command did not finish within timeout.");
-        return false;
+        return new SsmCommandResult(false, commandId, latestStatus, latestStdout, latestStderr, executedCommand);
+    }
+
+    public static class SsmCommandResult {
+        private final boolean success;
+        private final String commandId;
+        private final CommandInvocationStatus finalStatus;
+        private final String standardOutput;
+        private final String standardError;
+        private final String executedCommand;
+
+        public SsmCommandResult(
+                boolean success,
+                String commandId,
+                CommandInvocationStatus finalStatus,
+                String standardOutput,
+                String standardError,
+                String executedCommand
+        ) {
+            this.success = success;
+            this.commandId = commandId;
+            this.finalStatus = finalStatus;
+            this.standardOutput = standardOutput;
+            this.standardError = standardError;
+            this.executedCommand = executedCommand;
+        }
+
+        public boolean isSuccess() {
+            return success;
+        }
+
+        public String getCommandId() {
+            return commandId;
+        }
+
+        public CommandInvocationStatus getFinalStatus() {
+            return finalStatus;
+        }
+
+        public String getStandardOutput() {
+            return standardOutput;
+        }
+
+        public String getStandardError() {
+            return standardError;
+        }
+
+        public String getExecutedCommand() {
+            return executedCommand;
+        }
     }
 
 }
