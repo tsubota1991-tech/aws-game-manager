@@ -1,34 +1,28 @@
 discord:
   bot:
-    # 将来的にDBから読む運用でも、プロパティ自体は残しておいてOK
-    # 環境変数 DISCORD_BOT_TOKEN があればそれを使う。なければ空。
-    api-token: ${DISCORD_BOT_TOKEN:}
+    # Botトークンは最終的に DB から読む運用想定なので、
+    # ここはとりあえず空 or プレースホルダ
+    api-token: ""
 
 app:
   encryption:
-    # systemd の Environment=APP_ENCRYPTION_SECRET=... を読む
-    # 空だった場合はアプリ側でエラーにする前提
+    # APP_ENCRYPTION_SECRET が必須（systemd の Environment で渡す）
     secret: ${APP_ENCRYPTION_SECRET:}
 
 spring:
   datasource:
-    # ★ systemd 側の SPRING_DATASOURCE_URL を優先的に使う
-    #   何も設定されていなければデフォルト値で localhost の MySQL に接続
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/aws_game_manager?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Tokyo&characterEncoding=UTF-8}
-
-    # ★ systemd 側の SPRING_DATASOURCE_USERNAME / PASSWORD を優先
+    # ★ systemd の環境変数 SPRING_DATASOURCE_URL を優先して読む
+    #   なければデフォルトでローカル MySQL
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/aws_game_manager?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Tokyo}
+    # ★ ユーザー名／パスワードも環境変数優先
     username: ${SPRING_DATASOURCE_USERNAME:awsuser}
     password: ${SPRING_DATASOURCE_PASSWORD:P@ssword2025}
-
-    # MySQL 用ドライバ
+    # ★ ドライバを明示的に MySQL にして H2 を使わせない
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      # 初期は update で自動テーブル作成
       ddl-auto: update
-    # MySQL 方言（MariaDB サーバでも基本これで動きます）
-    database-platform: org.hibernate.dialect.MySQLDialect
     show-sql: true
     properties:
       hibernate.format_sql: true
