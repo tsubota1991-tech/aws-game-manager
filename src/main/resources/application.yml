@@ -1,0 +1,17 @@
+discord:
+  bot:
+    api-token: ""
+
+app:
+  encryption:
+    secret: ${APP_ENCRYPTION_SECRET:}
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/aws_game_manager?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME:aws_game_manager}
+    password: ${DB_PASSWORD:password}
+  jpa:
+    hibernate:
+      ddl-auto: update
