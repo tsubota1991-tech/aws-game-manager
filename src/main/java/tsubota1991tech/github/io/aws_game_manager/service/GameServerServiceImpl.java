@@ -22,6 +22,7 @@ import software.amazon.awssdk.services.ec2.model.StartInstancesRequest;
 import software.amazon.awssdk.services.ec2.model.StartInstancesResponse;
 import software.amazon.awssdk.services.ec2.model.StopInstancesRequest;
 import software.amazon.awssdk.services.ec2.model.StopInstancesResponse;
+import software.amazon.awssdk.services.ssm.model.CommandInvocationStatus;
 import tsubota1991tech.github.io.aws_game_manager.aws.AwsSsmService;
 import tsubota1991tech.github.io.aws_game_manager.domain.CloudAccount;
 import tsubota1991tech.github.io.aws_game_manager.domain.GameServer;
@@ -183,71 +184,73 @@ public class GameServerServiceImpl implements GameServerService {
 
         String backupScriptPath = server.getBackupScriptPath();
         if (backupScriptPath == null || backupScriptPath.isBlank()) {
-            server.setLastStatus("BACKUP SCRIPT NOT SET");
+            log.info("[GameServerService] backupScriptPath not set. Skipping backup before stop.");
+            server.setLastStatus("BACKUP SKIPPED");
             gameServerRepository.save(server);
-            throw new GameServerOperationException(
-                "バックアップスクリプトのパスが設定されていません。\n" +
-                "Game Server 編集画面で backupScriptPath を設定してください。"
-            );
-        }
+        } else {
+            AwsSsmService.SsmCommandResult backupResult;
+            try {
+                backupResult = awsSsmService.runShellScriptAndWait(
+                        account.getAwsAccessKeyId(),       // ★ 修正
+                        account.getAwsSecretAccessKey(),   // ★ 修正
+                        account.getDefaultRegion(),        // ★ 修正
+                        server.getEc2InstanceId(),
+                        backupScriptPath,
+                        "7dtd backup before stop"
+                );
+            } catch (Exception ex) {
+                log.error("[GameServerService] AwsSsmService threw exception", ex);
+                backupResult = new AwsSsmService.SsmCommandResult(
+                        false,
+                        null,
+                        null,
+                        null,
+                        ex.getMessage(),
+                        "sudo " + backupScriptPath
+                );
+            }
 
-        AwsSsmService.SsmCommandResult backupResult;
-        try {
-            backupResult = awsSsmService.runShellScriptAndWait(
-                    account.getAwsAccessKeyId(),       // ★ 修正
-                    account.getAwsSecretAccessKey(),   // ★ 修正
-                    account.getDefaultRegion(),        // ★ 修正
-                    server.getEc2InstanceId(),
-                    backupScriptPath,
-                    "7dtd backup before stop"
+            log.info(
+                    "[GameServerService] AwsSsmService result success={} commandId={} status={} stdout={} stderr={}",
+                    backupResult.isSuccess(),
+                    backupResult.getCommandId(),
+                    backupResult.getFinalStatus(),
+                    backupResult.getStandardOutput(),
+                    backupResult.getStandardError()
             );
-        } catch (Exception ex) {
-            log.error("[GameServerService] AwsSsmService threw exception", ex);
-            backupResult = new AwsSsmService.SsmCommandResult(
-                    false,
-                    null,
-                    null,
-                    null,
-                    ex.getMessage(),
-                    "sudo " + backupScriptPath
-            );
-        }
 
-        log.info(
-                "[GameServerService] AwsSsmService result success={} commandId={} status={} stdout={} stderr={}",
-                backupResult.isSuccess(),
-                backupResult.getCommandId(),
-                backupResult.getFinalStatus(),
-                backupResult.getStandardOutput(),
-                backupResult.getStandardError()
-        );
+            if (!backupResult.isSuccess()) {
+                server.setLastStatus("BACKUP FAILED");
+                gameServerRepository.save(server);
 
-        if (!backupResult.isSuccess()) {
-            server.setLastStatus("BACKUP FAILED");
+                StringBuilder msg = new StringBuilder();
+                msg.append("サーバ停止前バックアップに失敗しました。ラズパイ側のバッチログを確認してください。");
+                msg.append("\n実行コマンド: ").append(backupResult.getExecutedCommand());
+
+                if (backupResult.getCommandId() != null) {
+                    msg.append("\nAWS Command ID: ").append(backupResult.getCommandId());
+                }
+
+                CommandInvocationStatus finalStatus = backupResult.getFinalStatus();
+                if (finalStatus != null) {
+                    msg.append("\nAWS SSM Status: ").append(finalStatus.toString());
+                }
+
+                if (backupResult.getStandardOutput() != null && !backupResult.getStandardOutput().isBlank()) {
+                    msg.append("\n--- stdout ---\n").append(backupResult.getStandardOutput());
+                }
+                if (backupResult.getStandardError() != null && !backupResult.getStandardError().isBlank()) {
+                    msg.append("\n--- stderr ---\n").append(backupResult.getStandardError());
+                }
+
+                throw new GameServerOperationException(
+                        msg.toString()
+                );
+            }
+
+            server.setLastStatus("BACKUP OK");
             gameServerRepository.save(server);
-
-            StringBuilder msg = new StringBuilder();
-            msg.append("サーバ停止前バックアップに失敗しました。ラズパイ側のバッチログを確認してください。");
-            msg.append("\n実行コマンド: ").append(backupResult.getExecutedCommand());
-
-            if (backupResult.getCommandId() != null) {
-                msg.append("\nAWS Command ID: ").append(backupResult.getCommandId());
-            }
-
-            if (backupResult.getStandardOutput() != null && !backupResult.getStandardOutput().isBlank()) {
-                msg.append("\n--- stdout ---\n").append(backupResult.getStandardOutput());
-            }
-            if (backupResult.getStandardError() != null && !backupResult.getStandardError().isBlank()) {
-                msg.append("\n--- stderr ---\n").append(backupResult.getStandardError());
-            }
-
-            throw new GameServerOperationException(
-                    msg.toString()
-            );
         }
-
-        server.setLastStatus("BACKUP OK");
-        gameServerRepository.save(server);
 
         // 2. EC2 を停止
         try (Ec2Client ec2 = buildEc2Client(account)) {
