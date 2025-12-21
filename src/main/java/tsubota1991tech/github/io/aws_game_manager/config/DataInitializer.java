@@ -108,6 +108,10 @@ public class DataInitializer implements CommandLineRunner {
             server.setPort(26900);
             server.setDescription("ローカル開発用のテストサーバ");
             server.setLastStatus("UNKNOWN");
+            server.setSpotInstance(false);
+            server.setRestartCooldownMinutes(5);
+            server.setStatusCheckIntervalMinutes(180);
+            server.setAddressRefreshDelaySeconds(20);
 
             // ★ ここで EC2 内のスクリプトパスを設定
             server.setStartScriptPath("/home/ubuntu/startserver.sh");
@@ -126,5 +130,6 @@ public class DataInitializer implements CommandLineRunner {
 
     private void initSystemSettings() {
         systemSettingService.ensureSettingExists(SystemSettingService.DISCORD_BOT_TOKEN_KEY, "");
+        systemSettingService.ensureSettingExists(SystemSettingService.SPOT_OPERATION_ENABLED_KEY, "false");
     }
 }

@@ -76,6 +76,16 @@
             <input id="region" type="text" class="form-control" th:field="*{region}">
         </div>
 
+        <div class="col-md-6">
+            <div class="form-check form-switch mt-4">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="spotInstance" th:field="*{spotInstance}">
+                <label class="form-check-label" for="spotInstance">
+                    このサーバーをスポットインスタンスとして運用する
+                </label>
+            </div>
+        </div>
+
         <div class="col-md-3">
             <label class="form-label" for="port">Port</label>
             <input id="port" type="number" class="form-control" th:field="*{port}">
@@ -114,6 +124,27 @@
                    th:field="*{backupScriptPath}" placeholder="/home/ubuntu/backup_7dtd.sh">
         </div>
 
+        <div class="col-md-4">
+            <label class="form-label" for="restartCooldownMinutes">停止後の再起動待機（分）</label>
+            <input id="restartCooldownMinutes" type="number" min="0" class="form-control"
+                   th:field="*{restartCooldownMinutes}" placeholder="5">
+            <div class="form-text">停止直後の起動制御に利用します。</div>
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label" for="statusCheckIntervalMinutes">起動中の状態確認間隔（分）</label>
+            <input id="statusCheckIntervalMinutes" type="number" min="0" class="form-control"
+                   th:field="*{statusCheckIntervalMinutes}" placeholder="180">
+            <div class="form-text">RUNNING中に連続で更新しないための間隔です。</div>
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label" for="addressRefreshDelaySeconds">起動後のIP再取得待機（秒）</label>
+            <input id="addressRefreshDelaySeconds" type="number" min="0" class="form-control"
+                   th:field="*{addressRefreshDelaySeconds}" placeholder="20">
+            <div class="form-text">起動直後にIPが未割当になる問題の回避用ディレイ。</div>
+        </div>
+
         <div class="col-md-6">
             <label class="form-label" for="publicIp">Public IP</label>
             <input id="publicIp" type="text" class="form-control" th:field="*{publicIp}">
@@ -122,6 +153,19 @@
         <div class="col-md-6">
             <label class="form-label" for="publicDns">Public DNS</label>
             <input id="publicDns" type="text" class="form-control" th:field="*{publicDns}">
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">最終起動時刻</label>
+            <input type="text" class="form-control" th:value="${gameServer.lastStartedAt}" readonly>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">最終停止時刻</label>
+            <input type="text" class="form-control" th:value="${gameServer.lastStoppedAt}" readonly>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">最終ステータス確認時刻</label>
+            <input type="text" class="form-control" th:value="${gameServer.lastStatusCheckedAt}" readonly>
         </div>
 
         <div class="col-12">

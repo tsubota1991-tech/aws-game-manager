@@ -1,5 +1,7 @@
 package tsubota1991tech.github.io.aws_game_manager.service;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -27,6 +29,7 @@ import tsubota1991tech.github.io.aws_game_manager.domain.CloudAccount;
 import tsubota1991tech.github.io.aws_game_manager.domain.GameServer;
 import tsubota1991tech.github.io.aws_game_manager.exception.GameServerOperationException;
 import tsubota1991tech.github.io.aws_game_manager.repository.GameServerRepository;
+import tsubota1991tech.github.io.aws_game_manager.service.SystemSettingService;
 
 @Service
 public class GameServerServiceImpl implements GameServerService {
@@ -35,14 +38,17 @@ public class GameServerServiceImpl implements GameServerService {
 
     private final GameServerRepository gameServerRepository;
     private final AwsSsmService awsSsmService;  // SSM 用サービス
+    private final SystemSettingService systemSettingService;
 
     // コンストラクタ DI
     public GameServerServiceImpl(
             GameServerRepository gameServerRepository,
-            AwsSsmService awsSsmService
+            AwsSsmService awsSsmService,
+            SystemSettingService systemSettingService
     ) {
         this.gameServerRepository = gameServerRepository;
         this.awsSsmService = awsSsmService;
+        this.systemSettingService = systemSettingService;
     }
 
     // ==========================
@@ -86,6 +92,17 @@ public class GameServerServiceImpl implements GameServerService {
         return server;
     }
 
+    private void validateSpotOperation(GameServer server) {
+        if (!server.isSpotInstance()) {
+            return;
+        }
+        if (!systemSettingService.isSpotOperationEnabled()) {
+            throw new GameServerOperationException(
+                    "スポットインスタンス運用が無効です。システム設定から有効化してください。"
+            );
+        }
+    }
+
     // ==========================
     // 共通：EC2 から Public IP / DNS を取得して GameServer に保存
     // ==========================
@@ -118,6 +135,85 @@ public class GameServerServiceImpl implements GameServerService {
                 instanceId, publicIp, publicDns);
     }
 
+    private void updateInstanceAddressWithDelay(Ec2Client ec2, GameServer server) {
+        Integer delaySeconds = Optional.ofNullable(server.getAddressRefreshDelaySeconds())
+                .filter(v -> v > 0)
+                .orElse(0);
+        if (delaySeconds > 0) {
+            try {
+                Thread.sleep(delaySeconds * 1000L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while waiting for address refresh. instanceId={}", server.getEc2InstanceId());
+                return;
+            }
+        }
+        updateInstanceAddress(ec2, server);
+    }
+
+    private InstanceStateName fetchCurrentState(Ec2Client ec2, GameServer server) {
+        DescribeInstancesResponse res = ec2.describeInstances(
+                DescribeInstancesRequest.builder()
+                        .instanceIds(server.getEc2InstanceId())
+                        .build()
+        );
+
+        if (res.reservations().isEmpty() || res.reservations().get(0).instances().isEmpty()) {
+            throw new GameServerOperationException("EC2 インスタンスが見つかりません: " + server.getEc2InstanceId());
+        }
+
+        return res.reservations().get(0).instances().get(0).state().name();
+    }
+
+    private void enforceRestartCooldown(GameServer server) {
+        LocalDateTime lastStopped = server.getLastStoppedAt();
+        Integer cooldownMinutes = Optional.ofNullable(server.getRestartCooldownMinutes())
+                .filter(v -> v > 0)
+                .orElse(null);
+
+        if (lastStopped == null || cooldownMinutes == null) {
+            return;
+        }
+
+        LocalDateTime allowedAt = lastStopped.plusMinutes(cooldownMinutes);
+        if (LocalDateTime.now().isBefore(allowedAt)) {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            throw new GameServerOperationException(
+                    "停止直後のため再起動できません。" + cooldownMinutes + "分後 ("
+                            + allowedAt.format(formatter) + ") 以降に再実行してください。"
+            );
+        }
+    }
+
+    private void enforceStatusCheckInterval(GameServer server) {
+        Integer intervalMinutes = Optional.ofNullable(server.getStatusCheckIntervalMinutes())
+                .filter(v -> v > 0)
+                .orElse(null);
+
+        if (intervalMinutes == null) {
+            return;
+        }
+
+        String lastStatus = server.getLastStatus();
+        if (lastStatus == null || !lastStatus.contains("RUNNING")) {
+            return;
+        }
+
+        LocalDateTime lastChecked = server.getLastStatusCheckedAt();
+        if (lastChecked == null) {
+            return;
+        }
+
+        LocalDateTime nextAllowed = lastChecked.plusMinutes(intervalMinutes);
+        if (LocalDateTime.now().isBefore(nextAllowed)) {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            throw new GameServerOperationException(
+                    "起動中の状態確認は" + intervalMinutes + "分間隔で実施してください。次回は "
+                            + nextAllowed.format(formatter) + " 以降に実行できます。"
+            );
+        }
+    }
+
     // ==========================
     // EC2 起動
     // ==========================
@@ -127,28 +223,44 @@ public class GameServerServiceImpl implements GameServerService {
         GameServer server = loadGameServer(gameServerId);
         CloudAccount account = server.getCloudAccount();
 
+        validateSpotOperation(server);
+
         log.info("[GameServerService] startServer id={} instanceId={}",
                 gameServerId, server.getEc2InstanceId());
 
         try (Ec2Client ec2 = buildEc2Client(account)) {
+            InstanceStateName currentState = fetchCurrentState(ec2, server);
+            if (InstanceStateName.RUNNING.equals(currentState)
+                    || InstanceStateName.PENDING.equals(currentState)) {
+                server.setLastStatus("START SKIPPED (" + currentState + ")");
+                gameServerRepository.save(server);
+                throw new GameServerOperationException(
+                        "既にインスタンスが起動中のため、起動処理をスキップしました。(現在: "
+                                + currentState + ")"
+                );
+            }
+
+            enforceRestartCooldown(server);
+
             StartInstancesRequest request = StartInstancesRequest.builder()
                     .instanceIds(server.getEc2InstanceId())
                     .build();
 
             StartInstancesResponse response = ec2.startInstances(request);
 
-            String currentState = response.startingInstances().isEmpty()
+            String currentStateText = response.startingInstances().isEmpty()
                     ? "UNKNOWN"
                     : response.startingInstances().get(0).currentState().nameAsString();
 
-            String statusText = "START " + currentState; // 例: "START RUNNING"
+            String statusText = "START " + currentStateText; // 例: "START RUNNING"
             log.info("[GameServerService] startServer result status={}", statusText);
 
             server.setLastStatus(statusText);
+            server.setLastStartedAt(LocalDateTime.now());
 
-            // 起動直後でも一応 IP / DNS 更新を試みる
+            // 起動後に少し待ってから IP / DNS を再取得
             try {
-                updateInstanceAddress(ec2, server);
+                updateInstanceAddressWithDelay(ec2, server);
             } catch (Ec2Exception e) {
                 log.warn("Failed to update instance address after start. instanceId={}",
                         server.getEc2InstanceId(), e);
@@ -176,65 +288,80 @@ public class GameServerServiceImpl implements GameServerService {
         GameServer server = loadGameServer(gameServerId);
         CloudAccount account = server.getCloudAccount();
 
+        validateSpotOperation(server);
+
         log.info("[GameServerService] stopServer id={} instanceId={}",
                 gameServerId, server.getEc2InstanceId());
 
-        log.info("[GameServerService] calling AwsSsmService.runShellScriptAndWait ...");
-
-        String backupScriptPath = server.getBackupScriptPath();
-        if (backupScriptPath == null || backupScriptPath.isBlank()) {
-            server.setLastStatus("BACKUP SCRIPT NOT SET");
-            gameServerRepository.save(server);
-            throw new GameServerOperationException(
-                "バックアップスクリプトのパスが設定されていません。\n" +
-                "Game Server 編集画面で backupScriptPath を設定してください。"
-            );
-        }
-
-        boolean backupOk;
-        try {
-            backupOk = awsSsmService.runShellScriptAndWait(
-                    account.getAwsAccessKeyId(),       // ★ 修正
-                    account.getAwsSecretAccessKey(),   // ★ 修正
-                    account.getDefaultRegion(),        // ★ 修正
-                    server.getEc2InstanceId(),
-                    backupScriptPath,
-                    "7dtd backup before stop"
-            );
-        } catch (Exception ex) {
-            log.error("[GameServerService] AwsSsmService threw exception", ex);
-            backupOk = false;
-        }
-
-        log.info("[GameServerService] AwsSsmService result backupOk={}", backupOk);
-
-        if (!backupOk) {
-            server.setLastStatus("BACKUP FAILED");
-            gameServerRepository.save(server);
-            throw new GameServerOperationException(
-                    "サーバ停止前バックアップに失敗しました。EC2 インスタンス上のログを確認してください。"
-            );
-        }
-
-        server.setLastStatus("BACKUP OK");
-        gameServerRepository.save(server);
-
-        // 2. EC2 を停止
         try (Ec2Client ec2 = buildEc2Client(account)) {
+            InstanceStateName currentState = fetchCurrentState(ec2, server);
+            if (InstanceStateName.STOPPED.equals(currentState)
+                    || InstanceStateName.STOPPING.equals(currentState)
+                    || InstanceStateName.SHUTTING_DOWN.equals(currentState)
+                    || InstanceStateName.TERMINATED.equals(currentState)) {
+                server.setLastStatus("STOP SKIPPED (" + currentState + ")");
+                gameServerRepository.save(server);
+                throw new GameServerOperationException(
+                        "既にインスタンスが停止中のため、停止処理をスキップしました。(現在: "
+                                + currentState + ")"
+                );
+            }
+
+            log.info("[GameServerService] calling AwsSsmService.runShellScriptAndWait ...");
+
+            String backupScriptPath = server.getBackupScriptPath();
+            if (backupScriptPath == null || backupScriptPath.isBlank()) {
+                server.setLastStatus("BACKUP SCRIPT NOT SET");
+                gameServerRepository.save(server);
+                throw new GameServerOperationException(
+                        "バックアップスクリプトのパスが設定されていません。\n"
+                                + "Game Server 編集画面で backupScriptPath を設定してください。"
+                );
+            }
+
+            boolean backupOk;
+            try {
+                backupOk = awsSsmService.runShellScriptAndWait(
+                        account.getAwsAccessKeyId(),       // ★ 修正
+                        account.getAwsSecretAccessKey(),   // ★ 修正
+                        account.getDefaultRegion(),        // ★ 修正
+                        server.getEc2InstanceId(),
+                        backupScriptPath,
+                        "7dtd backup before stop"
+                );
+            } catch (Exception ex) {
+                log.error("[GameServerService] AwsSsmService threw exception", ex);
+                backupOk = false;
+            }
+
+            log.info("[GameServerService] AwsSsmService result backupOk={}", backupOk);
+
+            if (!backupOk) {
+                server.setLastStatus("BACKUP FAILED");
+                gameServerRepository.save(server);
+                throw new GameServerOperationException(
+                        "サーバ停止前バックアップに失敗しました。EC2 インスタンス上のログを確認してください。"
+                );
+            }
+
+            server.setLastStatus("BACKUP OK");
+            gameServerRepository.save(server);
+
             StopInstancesRequest request = StopInstancesRequest.builder()
                     .instanceIds(server.getEc2InstanceId())
                     .build();
 
             StopInstancesResponse response = ec2.stopInstances(request);
 
-            String currentState = response.stoppingInstances().isEmpty()
+            String currentStateText = response.stoppingInstances().isEmpty()
                     ? "UNKNOWN"
                     : response.stoppingInstances().get(0).currentState().nameAsString();
 
-            String statusText = "STOP " + currentState; // 例: "STOP STOPPING"
+            String statusText = "STOP " + currentStateText; // 例: "STOP STOPPING"
             log.info("[GameServerService] stopServer result status={}", statusText);
 
             server.setLastStatus(statusText);
+            server.setLastStoppedAt(LocalDateTime.now());
 
             // 停止後の IP / DNS 更新（無ければ null）
             try {
@@ -269,6 +396,8 @@ public class GameServerServiceImpl implements GameServerService {
         log.info("[GameServerService] refreshStatus id={} instanceId={}",
                 gameServerId, server.getEc2InstanceId());
 
+        enforceStatusCheckInterval(server);
+
         try (Ec2Client ec2 = buildEc2Client(account)) {
             DescribeInstanceStatusRequest request = DescribeInstanceStatusRequest.builder()
                     .includeAllInstances(true)
@@ -293,6 +422,7 @@ public class GameServerServiceImpl implements GameServerService {
             log.info("[GameServerService] refreshStatus result status={}", statusText);
 
             server.setLastStatus(statusText);
+            server.setLastStatusCheckedAt(LocalDateTime.now());
 
             // Public IP / DNS を最新化
             try {

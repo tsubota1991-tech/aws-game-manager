@@ -82,6 +82,17 @@ public class GameServerController {
             }
         }
 
+        // デフォルト値の補完
+        if (server.getRestartCooldownMinutes() == null) {
+            server.setRestartCooldownMinutes(5);
+        }
+        if (server.getStatusCheckIntervalMinutes() == null) {
+            server.setStatusCheckIntervalMinutes(180);
+        }
+        if (server.getAddressRefreshDelaySeconds() == null) {
+            server.setAddressRefreshDelaySeconds(20);
+        }
+
         gameServerRepository.save(server);
         redirectAttributes.addFlashAttribute("message", "GameServer を登録しました。");
         return "redirect:/admin/game-servers";
@@ -123,8 +134,12 @@ public class GameServerController {
         server.setRegion(form.getRegion());
         server.setPort(form.getPort());
         server.setEc2InstanceId(form.getEc2InstanceId());
+        server.setSpotInstance(form.isSpotInstance());
         server.setStartScriptPath(form.getStartScriptPath());
         server.setBackupScriptPath(form.getBackupScriptPath());
+        server.setRestartCooldownMinutes(form.getRestartCooldownMinutes());
+        server.setStatusCheckIntervalMinutes(form.getStatusCheckIntervalMinutes());
+        server.setAddressRefreshDelaySeconds(form.getAddressRefreshDelaySeconds());
 
         // CloudAccount の再紐づけ
         if (form.getCloudAccount() != null && form.getCloudAccount().getId() != null) {
@@ -133,6 +148,16 @@ public class GameServerController {
             server.setCloudAccount(account);
         } else {
             server.setCloudAccount(null);
+        }
+
+        if (server.getRestartCooldownMinutes() == null) {
+            server.setRestartCooldownMinutes(5);
+        }
+        if (server.getStatusCheckIntervalMinutes() == null) {
+            server.setStatusCheckIntervalMinutes(180);
+        }
+        if (server.getAddressRefreshDelaySeconds() == null) {
+            server.setAddressRefreshDelaySeconds(20);
         }
 
         gameServerRepository.save(server);
