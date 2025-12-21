@@ -1,5 +1,7 @@
 package tsubota1991tech.github.io.aws_game_manager.domain;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -30,6 +32,12 @@ public class GameServer {
     private Integer port;
     private String ec2InstanceId;
 
+    /**
+     * スポットインスタンスとして運用するかどうか
+     */
+    @Column(nullable = false)
+    private boolean spotInstance;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cloud_account_id")
     private CloudAccount cloudAccount;
@@ -57,6 +65,29 @@ public class GameServer {
 
     @Column(length = 255)
     private String backupScriptPath;       // 例: /home/ubuntu/backup_7dtd.sh
+
+    // ▼ 追加: 起動/停止や状態確認のメタ情報
+    private LocalDateTime lastStartedAt;
+    private LocalDateTime lastStoppedAt;
+    private LocalDateTime lastStatusCheckedAt;
+
+    /**
+     * 停止後に再起動を許可するまでの待機時間（分）
+     */
+    @Column
+    private Integer restartCooldownMinutes = 5;
+
+    /**
+     * 起動中の状態確認を実施する間隔（分）
+     */
+    @Column
+    private Integer statusCheckIntervalMinutes = 180;
+
+    /**
+     * 起動直後に Public IP を再取得するまでの待ち時間（秒）
+     */
+    @Column
+    private Integer addressRefreshDelaySeconds = 20;
 
     // ===== getter / setter =====
 
@@ -124,6 +155,14 @@ public class GameServer {
         this.description = description;
     }
 
+    public boolean isSpotInstance() {
+        return spotInstance;
+    }
+
+    public void setSpotInstance(boolean spotInstance) {
+        this.spotInstance = spotInstance;
+    }
+
     public String getLastStatus() {
         return lastStatus;
     }
@@ -178,5 +217,53 @@ public class GameServer {
 
     public void setBackupScriptPath(String backupScriptPath) {
         this.backupScriptPath = backupScriptPath;
+    }
+
+    public LocalDateTime getLastStartedAt() {
+        return lastStartedAt;
+    }
+
+    public void setLastStartedAt(LocalDateTime lastStartedAt) {
+        this.lastStartedAt = lastStartedAt;
+    }
+
+    public LocalDateTime getLastStoppedAt() {
+        return lastStoppedAt;
+    }
+
+    public void setLastStoppedAt(LocalDateTime lastStoppedAt) {
+        this.lastStoppedAt = lastStoppedAt;
+    }
+
+    public LocalDateTime getLastStatusCheckedAt() {
+        return lastStatusCheckedAt;
+    }
+
+    public void setLastStatusCheckedAt(LocalDateTime lastStatusCheckedAt) {
+        this.lastStatusCheckedAt = lastStatusCheckedAt;
+    }
+
+    public Integer getRestartCooldownMinutes() {
+        return restartCooldownMinutes;
+    }
+
+    public void setRestartCooldownMinutes(Integer restartCooldownMinutes) {
+        this.restartCooldownMinutes = restartCooldownMinutes;
+    }
+
+    public Integer getStatusCheckIntervalMinutes() {
+        return statusCheckIntervalMinutes;
+    }
+
+    public void setStatusCheckIntervalMinutes(Integer statusCheckIntervalMinutes) {
+        this.statusCheckIntervalMinutes = statusCheckIntervalMinutes;
+    }
+
+    public Integer getAddressRefreshDelaySeconds() {
+        return addressRefreshDelaySeconds;
+    }
+
+    public void setAddressRefreshDelaySeconds(Integer addressRefreshDelaySeconds) {
+        this.addressRefreshDelaySeconds = addressRefreshDelaySeconds;
     }
 }

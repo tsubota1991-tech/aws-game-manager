@@ -28,14 +28,17 @@ public class SystemSettingController {
     public String showForm(Model model) {
         String discordToken = systemSettingService.getDiscordBotToken();
         model.addAttribute("discordBotToken", discordToken);
+        model.addAttribute("spotOperationEnabled", systemSettingService.isSpotOperationEnabled());
         return "admin/system_settings/form";
     }
 
     @PostMapping
     public String update(
             @RequestParam(name = "discordBotToken", required = false) String discordBotToken,
+            @RequestParam(name = "spotOperationEnabled", defaultValue = "false") boolean spotOperationEnabled,
             RedirectAttributes redirectAttributes
     ) {
+        systemSettingService.updateSpotOperationEnabled(spotOperationEnabled);
         systemSettingService.updateDiscordBotToken(discordBotToken);
         try {
             discordBotManager.reload(discordBotToken);

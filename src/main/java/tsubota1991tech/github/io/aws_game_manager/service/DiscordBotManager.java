@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.exceptions.InvalidTokenException;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import tsubota1991tech.github.io.aws_game_manager.discord.DiscordBotListener;
 
@@ -79,6 +80,31 @@ public class DiscordBotManager {
     public boolean isRunning() {
         synchronized (lock) {
             return jda != null && jda.getStatus() != JDA.Status.SHUTDOWN;
+        }
+    }
+
+    public void sendMessageToDefaultChannel(String message) {
+        synchronized (lock) {
+            if (jda == null || jda.getStatus() == JDA.Status.SHUTDOWN) {
+                log.warn("Discord Bot が起動していないため、メッセージを送信できませんでした。");
+                return;
+            }
+
+            TextChannel channel = jda.getTextChannels()
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+
+            if (channel == null) {
+                log.warn("送信可能な Discord チャンネルが見つかりませんでした。");
+                return;
+            }
+
+            channel.sendMessage(message)
+                    .queue(
+                            success -> log.info("Discord への自動通知を送信しました。channel={} message={}", channel.getName(), message),
+                            error -> log.error("Discord への自動通知送信に失敗しました。", error)
+                    );
         }
     }
 }

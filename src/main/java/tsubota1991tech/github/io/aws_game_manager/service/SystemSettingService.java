@@ -14,6 +14,7 @@ import tsubota1991tech.github.io.aws_game_manager.security.EncryptionService;
 public class SystemSettingService {
 
     public static final String DISCORD_BOT_TOKEN_KEY = "DISCORD_BOT_TOKEN";
+    public static final String SPOT_OPERATION_ENABLED_KEY = "SPOT_OPERATION_ENABLED";
 
     private final SystemSettingRepository systemSettingRepository;
     private final EncryptionService encryptionService;
@@ -29,9 +30,19 @@ public class SystemSettingService {
         return getSettingValue(DISCORD_BOT_TOKEN_KEY);
     }
 
+    @Transactional(readOnly = true)
+    public boolean isSpotOperationEnabled() {
+        return Boolean.parseBoolean(getSettingValue(SPOT_OPERATION_ENABLED_KEY));
+    }
+
     @Transactional
     public void updateDiscordBotToken(String token) {
         upsertSetting(DISCORD_BOT_TOKEN_KEY, encryptIfNeeded(token));
+    }
+
+    @Transactional
+    public void updateSpotOperationEnabled(boolean enabled) {
+        upsertSetting(SPOT_OPERATION_ENABLED_KEY, String.valueOf(enabled));
     }
 
     @Transactional
