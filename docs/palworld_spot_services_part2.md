@@ -5,7 +5,7 @@
 ## 1. Auto Scaling Group (ASG) の設定
 - **名前**: `palworld-spot-asg`
 - **起動テンプレート**: `palworld-spot-lt-v1`、`Version: Latest`
-- **サブネット**: 複数 AZ のプライベートサブネットを指定
+- **サブネット**: `subnet-xxxxxxxx_apne1a_private`, `subnet-yyyyyyyy_apne1c_private` を指定
 - **キャパシティ**: `Desired=1`, `Min=0`, `Max=2`（ピークに合わせ調整）
 - **Mixed Instances Policy**:
   - `OnDemandPercentageAboveBaseCapacity=0`（全スポット）
@@ -28,6 +28,7 @@
   - `StatusCheckFailed_Instance` で自動再起動/復旧を ASG 任せにする。
   - `CPUUtilization`、`NetworkIn/Out`、カスタムメトリクス（接続数）を監視。
 - **Self-healing**: ASG のヘルスチェック異常時にインスタンスを置換する設定を有効化。
+- **タグ例**: `Name=pal-spot-asg`, `Project=palworld`, `Env=prod`, `Owner=ops-team`（`PropagateAtLaunch=true`）
 - **AMI ローテーション**: ベース AMI 更新時は LT のバージョンを更新し、ASG でインスタンスリフレッシュを実施。
 
 ---
