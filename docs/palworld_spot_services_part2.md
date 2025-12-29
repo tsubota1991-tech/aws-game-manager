@@ -16,6 +16,13 @@
   - CPU > 70% が 5 分継続で `+1`。
   - 接続プレイヤー数（カスタムメトリクス）> 20 で `+1`。
 - **ライフサイクルフック**: `Terminating:wait` を 120〜180 秒設定し、中断時にセーブ/通知を実行する Lambda または SSM Run Command を呼び出す。
+- **その他の入力例（コンソールの値）**:
+  - **AZ バランシング**: デフォルト（有効）
+  - **インスタンスウォームアップ**: 300 秒
+  - **スケールインの保護**: 初期は無効、必要に応じて特定インスタンスに付与
+  - **ELB 側のヘルスチェック**: 使用する場合はターゲットグループを紐付け、`HealthCheckType=ELB`
+  - **アタッチするターゲットグループ**: 任意 (`palworld-udp-tg` など)、`HealthCheckProtocol=TCP` を指定
+  - **タグ**: `Name=pal-spot-asg`, `Project=palworld`, `Env=prod`, `Owner=ops-team`（`PropagateAtLaunch=true`）
 
 ## 2. スポット中断通知ハンドリング
 - **メタデータ監視**: インスタンス内で 30 秒毎に `http://169.254.169.254/latest/meta-data/spot/instance-action` を監視する systemd サービス/cron を配置。
@@ -30,6 +37,7 @@
 - **Self-healing**: ASG のヘルスチェック異常時にインスタンスを置換する設定を有効化。
 - **タグ例**: `Name=pal-spot-asg`, `Project=palworld`, `Env=prod`, `Owner=ops-team`（`PropagateAtLaunch=true`）
 - **AMI ローテーション**: ベース AMI 更新時は LT のバージョンを更新し、ASG でインスタンスリフレッシュを実施。
+  - ロールアウト例: `MinHealthyPercentage=90`, `InstanceWarmup=300s`, `CheckpointDelay=0s`
 
 ---
 # ④ 当システムでの設定

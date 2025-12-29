@@ -12,14 +12,19 @@
 
 ## 1. IAM とログ・パラメータ管理
 - **IAM ロール/インスタンスプロファイル**: `PalworldSpotInstanceRole`
-  - アタッチポリシー例:
-    - `AmazonSSMManagedInstanceCore`
-    - `AmazonEC2ReadOnlyAccess` (インスタンスメタデータ・タグ参照用最小権限に絞ること推奨)
-    - `CloudWatchAgentServerPolicy`（メトリクス送信）
-    - `AmazonElasticFileSystemClientFullAccess`
-    - 任意: `palworld-backup-prod` バケットのみに `s3:PutObject` を許可するカスタムポリシー（`Resource` を `arn:aws:s3:::palworld-backup-prod/save/*` に限定）
-- **Parameter Store (任意)**: `palworld/server/AdminPassword` を SecureString、KMS デフォルトキーで暗号化。`Tier=Standard`, `DataType=text`。
-- **CloudWatch Logs**: `/palworld/server` ロググループを事前作成し、`Retention=30 days`。CloudWatch Agent の `logs/metrics` セクションで `palserver.service` の標準出力を `/var/log/journal` から収集。
+  - コンソール作成例:
+    - 信頼されたエンティティタイプ: **AWS のサービス** → **EC2**
+    - ロール名: `PalworldSpotInstanceRole`
+    - 権限の割り当て: 次のポリシーを選択してアタッチ
+      - `AmazonSSMManagedInstanceCore`
+      - `AmazonEC2ReadOnlyAccess` (インスタンスメタデータ・タグ参照用最小権限に絞ること推奨)
+      - `CloudWatchAgentServerPolicy`（メトリクス送信）
+      - `AmazonElasticFileSystemClientFullAccess`
+      - 任意: `palworld-backup-prod` バケットのみに `s3:PutObject` を許可するカスタムポリシー（`Resource` を `arn:aws:s3:::palworld-backup-prod/save/*` に限定）
+    - タグ: 必要に応じ `Name=pal-spot-role`, `Project=palworld`, `Env=prod`
+    - インスタンスプロファイル: 同名で自動作成されるものを EC2 にアタッチ
+  - **Parameter Store (任意)**: `palworld/server/AdminPassword` を SecureString、KMS デフォルトキーで暗号化。`Tier=Standard`, `DataType=text`。
+  - **CloudWatch Logs**: `/palworld/server` ロググループを事前作成し、`Retention=30 days`。CloudWatch Agent の `logs/metrics` セクションで `palserver.service` の標準出力を `/var/log/journal` から収集。
 
 ## 2. ネットワークと EFS
 - **サブネット例**: `10.0.0.0/24` VPC 内にプライベートサブネットを 2 つ作成（例: `10.0.0.0/25` in apne1a, `10.0.0.128/25` in apne1c）。ASG は両方に配置し、EFS マウントターゲットも各 AZ に配置。
@@ -38,7 +43,7 @@
 - **AMI**: ①で作成したベース AMI
 - **インスタンスタイプ**: 複数候補を `InstanceTypesOverrides` で指定（例: `c6i.large`, `m6a.large`, `c5.large`）。
 - **キーペア**: 管理用を指定
-- **ネットワーク**: 前述のプライベートサブネット/SG を紐付け
+- **ネットワーク**: 前述のプライベートサブネット/SG を紐付け（例: `subnet-xxxxxxxx_apne1a_private`, `sg-ec2-palworld-spot`）
 - **ブロックデバイス**: ルート 30〜50GB gp3
 - **IAM インスタンスプロファイル**: `PalworldSpotInstanceRole`
 - **詳細監視**: 有効化（`Detailed Monitoring`）
