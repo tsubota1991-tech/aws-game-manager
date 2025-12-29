@@ -2,6 +2,12 @@
 
 ここではベース AMI を基にスポット運用するための周辺サービスを整備します。値は ap-northeast-1 を例にしています。
 
+## 読み進め方
+1. まず [`docs/palworld_ec2_base.md`](./palworld_ec2_base.md) でベース EC2/AMI と EFS を準備
+2. 次に本ドキュメント（②）で IAM・ネットワーク・Launch Template を設定
+3. 続けて [`docs/palworld_spot_services_part2.md`](./palworld_spot_services_part2.md) で ASG・中断対応を設定
+4. 最後にシステム連携は [`docs/palworld_spot_services_part2.md`](./palworld_spot_services_part2.md#④-当システムでの設定) の ④ を参照
+
 ## 0. VPC 作成例（コンソール画面の実値）
 - **作成するリソース**: VPC のみ
 - **名前タグ**: `pal-spot-vpc`（キー: `Name`, 値: `pal-spot-vpc`）
