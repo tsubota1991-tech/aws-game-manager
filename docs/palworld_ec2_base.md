@@ -10,16 +10,15 @@
     - AZ: ap-northeast-1a / ap-northeast-1c を明示選択
     - IPv4 VPC CIDR ブロック: `10.0.0.0/24` をプルダウンから選択
     - IPv4 サブネット CIDR ブロック: apne1a=`10.0.0.0/25`（検証なら `/28`）、apne1c=`10.0.0.128/25`（検証なら `/28`）
-- **インターネット/NAT**: 
-  - IGW を VPC にアタッチ。
-  - パブリックサブネット（例: `10.0.0.240/28` in apne1a）に NAT Gateway（EIP 付き）を 1 台以上配置し、プライベートサブネットのデフォルトルートを `nat-xxxx` に向ける。
-- **ルートテーブル**:
-  - パブリック RT: `0.0.0.0/0 -> igw-xxxx`、パブリックサブネットを関連付け。
-  - プライベート RT: `0.0.0.0/0 -> nat-xxxx`、プライベートサブネット2つを関連付け。
-  - VPC エンドポイントを置く場合は該当 RT にプレフィックスを追加（例: `com.amazonaws.ap-northeast-1.s3` の Gateway 型をプライベート RT に関連付け）。
+- **インターネット/NAT の作り方（コンソール手順）**:  
+  1. 左メニュー「インターネットゲートウェイ」→「インターネットゲートウェイを作成」→名前タグ `pal-spot-igw` → 作成 → 「VPC にアタッチ」から `pal-spot-vpc` を選択してアタッチ。
+  2. 左メニュー「サブネット」→ パブリック用に新規サブネット（例: `10.0.0.240/28`, AZ=apne1a, タグ `Name=pub-apne1a`）。  
+  3. 左メニュー「NAT ゲートウェイ」→「NAT ゲートウェイを作成」→ サブネットに上記パブリックサブネットを選択 → 「接続タイプ: パブリック」→ 新しい Elastic IP を割り当て → 作成。  
+  4. 左メニュー「ルートテーブル」→「ルートテーブルを作成」→ 名前 `pal-spot-public-rt`, VPC=`pal-spot-vpc` → 作成後「ルートを編集」で `0.0.0.0/0 -> igw-xxxx` を追加 → 「サブネットの関連付け」でパブリックサブネットを関連付け。  
+  5. 同様に「ルートテーブルを作成」→ 名前 `pal-spot-private-rt` → ルートに `0.0.0.0/0 -> nat-xxxx` を追加 → サブネットの関連付けでプライベートサブネット2つ（apne1a/apne1c）を関連付け。
 - **VPC エンドポイント（任意だが推奨）**:
-  - Gateway 型: S3（コスト0）をプライベート RT に関連付け。
-  - Interface 型: SSM/EC2Messages/SSMMessages/CloudWatchLogs/ECR（api,dkr）を必要に応じ作成。SG は EC2 SG からの 443 を許可。
+  - Gateway 型 S3: 左メニュー「エンドポイント」→「エンドポイントを作成」→ サービス名で `com.amazonaws.ap-northeast-1.s3` を選択 → タイプ `Gateway` → ルートテーブルに `pal-spot-private-rt` を選択 → 作成。
+  - Interface 型 (SSM/EC2Messages/SSMMessages/CloudWatchLogs/ECR api,dkr など): 同画面でタイプ `Interface` を選択し、サブネットはプライベート2つをチェック、セキュリティグループに `sg-ec2-palworld-spot` を指定（少なくとも 443 許可）。作成後、プライベート RT のルートは自動作成される。
 - **セキュリティグループ (SG)**: 
   - EC2 用 SG (例: `sg-ec2-palworld-spot`):
     - Inbound: `8211/udp`（クライアント元）、`22/tcp`（管理端末）、EFS SG への `2049/tcp` は不要（アウトバウンドで許可するため）。
