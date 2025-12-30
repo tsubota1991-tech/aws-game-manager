@@ -3,13 +3,26 @@
 パルワールドをスポットインスタンスで運用する前提として、オンデマンドで1台構築し、EFS上にワールド/セーブ/ゲームデータを配置した状態をAMI化します。以下は構築時の推奨設定例です。
 
 ## 1. ネットワーク・基本設定
-- **VPC/サブネット**: コンソール作成例では VPC 名タグ `pal-spot-vpc`、IPv4 CIDR `10.0.0.0/24`（IPv6 なし）。`10.0.0.0/25`（apne1a）と `10.0.0.128/25`（apne1c）のプライベートサブネットを用意し、NAT Gateway や VPC エンドポイントを配置して SteamCMD ダウンロードやパッケージ取得を許可。
+- **VPC/サブネット**: コンソール作成例では VPC 名タグ `pal-spot-vpc`、IPv4 CIDR `10.0.0.0/24`（IPv6 なし）。
+  - サブネット: `10.0.0.0/25`（apne1a）、`10.0.0.128/25`（apne1c）。検証最小構成なら `/28` でも可。
+  - サブネットの DNS 解決: デフォルト ON（VPC の「DNS 解決を有効化」「DNS ホスト名を有効化」を ON のまま）。
+- **インターネット/NAT**: 
+  - IGW を VPC にアタッチ。
+  - パブリックサブネット（例: `10.0.0.240/28` in apne1a）に NAT Gateway（EIP 付き）を 1 台以上配置し、プライベートサブネットのデフォルトルートを `nat-xxxx` に向ける。
+- **ルートテーブル**:
+  - パブリック RT: `0.0.0.0/0 -> igw-xxxx`、パブリックサブネットを関連付け。
+  - プライベート RT: `0.0.0.0/0 -> nat-xxxx`、プライベートサブネット2つを関連付け。
+  - VPC エンドポイントを置く場合は該当 RT にプレフィックスを追加（例: `com.amazonaws.ap-northeast-1.s3` の Gateway 型をプライベート RT に関連付け）。
+- **VPC エンドポイント（任意だが推奨）**:
+  - Gateway 型: S3（コスト0）をプライベート RT に関連付け。
+  - Interface 型: SSM/EC2Messages/SSMMessages/CloudWatchLogs/ECR（api,dkr）を必要に応じ作成。SG は EC2 SG からの 443 を許可。
 - **セキュリティグループ (SG)**: 
-  - `8211/udp` (パルワールドデフォルト) をインターネット/必要クライアントに開放。
-  - `22/tcp` (管理用) は管理端末からのみ許可。
-  - EFS マウント用に、EFS 側 SG からの `2049/tcp` を許可。
-- **キーペア**: 初期セットアップ/障害対応用に作成。
-- **IAM ロール**: EC2 インスタンスプロファイルに `AmazonSSMManagedInstanceCore`、`AmazonElasticFileSystemClientFullAccess`、必要なら S3 読取/CloudWatch Logs 出力を付与。
+  - EC2 用 SG (例: `sg-ec2-palworld-spot`):
+    - Inbound: `8211/udp`（クライアント元）、`22/tcp`（管理端末）、EFS SG への `2049/tcp` は不要（アウトバウンドで許可するため）。
+    - Outbound: デフォルト許可、または EFS SG 宛 `2049/tcp` と `0.0.0.0/0`（NAT 経由の更新/ダウンロード用）。
+  - EFS 用 SG (例: `sg-efs-palworld`): Inbound に EC2 SG からの `2049/tcp`、Outbound はデフォルト許可。
+- **キーペア**: 初期セットアップ/障害対応用に作成（例: `palworld-admin-key`）。必要なら Session Manager 接続ができるので鍵レス運用も可。
+- **IAM ロール**: EC2 インスタンスプロファイルに `AmazonSSMManagedInstanceCore`、`AmazonElasticFileSystemClientFullAccess`、必要なら S3 読取/CloudWatch Logs 出力を付与。スポット運用に揃える場合は `PalworldSpotInstanceRole` を共用。
 
 ## 2. EFS の準備
 - **EFS ファイルシステム**: パフォーマンス `General Purpose`、スループット `Bursting` (負荷が高い場合は `Provisioned` も検討)。
