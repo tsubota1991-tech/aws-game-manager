@@ -41,6 +41,14 @@
     - Outbound: デフォルト許可、または EFS SG 宛 `2049/tcp` と `0.0.0.0/0`（NAT 経由の更新/ダウンロード用）。
   - EFS 用 SG (例: `sg-efs-palworld`): Inbound に EC2 SG からの `2049/tcp`、Outbound はデフォルト許可。
 - SG 作成手順（例）: 左メニュー「セキュリティグループ」→「セキュリティグループを作成」→ VPC に `pal-spot-vpc` を選択 → インバウンド/アウトバウンドを上記のとおり入力 → タグ `Project=palworld`,`Env=prod` → 作成。
+- SG の入力例（EC2 用）  
+  - セキュリティグループ名: `sg-ec2-palworld-spot`  
+  - VPC: `pal-spot-vpc`  
+  - インバウンドルールを追加:  
+    1. タイプ: カスタム UDP、ポート範囲: `8211`、送信元: 必要なクライアント CIDR（例: `0.0.0.0/0` か許可したいグローバルIP）  
+    2. タイプ: SSH、ポート範囲: `22`、送信元: 管理端末の固定IP（例: `203.0.113.10/32`）  
+  - アウトバウンドルール: すべて許可（デフォルトのまま）または必要に応じて `sg-efs-palworld` 宛 `2049/tcp` を明示  
+  - 保存して作成（デフォルトの 0/tcp 行は削除し、上記ルールのみにする）
 - **キーペア**: 初期セットアップ/障害対応用に作成（例: `palworld-admin-key`）。必要なら Session Manager 接続ができるので鍵レス運用も可。
   - 手順: 左メニュー「キーペア」→「キーペアを作成」→ 名前入力・ファイル形式 `pem` → 作成してダウンロードを安全に保管。
 - **IAM ロール**: EC2 インスタンスプロファイルに `AmazonSSMManagedInstanceCore`、`AmazonElasticFileSystemClientFullAccess`、必要なら S3 読取/CloudWatch Logs 出力を付与。スポット運用に揃える場合は `PalworldSpotInstanceRole` を共用。
