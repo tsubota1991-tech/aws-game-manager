@@ -20,8 +20,21 @@
   4. 左メニュー「ルートテーブル」→「ルートテーブルを作成」→ 名前 `pal-spot-public-rt`, VPC=`pal-spot-vpc` → 作成後「ルートを編集」で `0.0.0.0/0 -> igw-xxxx` を追加 → 「サブネットの関連付け」でパブリックサブネットを関連付け。  
   5. 同様に「ルートテーブルを作成」→ 名前 `pal-spot-private-rt` → ルートに `0.0.0.0/0 -> nat-xxxx` を追加 → サブネットの関連付けでプライベートサブネット2つ（apne1a/apne1c）を関連付け。
 - **VPC エンドポイント（任意だが推奨）**:
-  - Gateway 型 S3: 左メニュー「エンドポイント」→「エンドポイントを作成」→ サービス名で `com.amazonaws.ap-northeast-1.s3` を選択 → タイプ `Gateway` → ルートテーブルに `pal-spot-private-rt` を選択 → 作成。
-  - Interface 型 (SSM/EC2Messages/SSMMessages/CloudWatchLogs/ECR api,dkr など): 同画面でタイプ `Interface` を選択し、サブネットはプライベート2つをチェック、セキュリティグループに `sg-ec2-palworld-spot` を指定（少なくとも 443 許可）。作成後、プライベート RT のルートは自動作成される。
+  - Gateway 型 S3（料金ほぼゼロ、強く推奨）  
+    1. 左メニュー「エンドポイント」→「エンドポイントを作成」  
+    2. サービスカテゴリで「AWS サービス」、検索で `s3` を入力し `com.amazonaws.ap-northeast-1.s3` を選択  
+    3. タイプ「Gateway」を選択  
+    4. VPC: `pal-spot-vpc` を選択  
+    5. ルートテーブル: `pal-spot-private-rt` をチェック  
+    6. ポリシーはデフォルト許可のまま → 「エンドポイントを作成」  
+  - Interface 型（SSM/EC2Messages/SSMMessages/CloudWatchLogs/ECR api,dkr など、必要に応じて追加）  
+    1. 同画面でサービス名を検索（例: `ssm`、`ec2messages`、`ssmmessages`、`logs`、`ecr.api`、`ecr.dkr`）を順に作成  
+    2. タイプ「Interface」を選択  
+    3. VPC: `pal-spot-vpc`  
+    4. サブネット: プライベートサブネット 2 つ（`in-apne1a` と `in-apne1c`）をチェック  
+    5. セキュリティグループ: `sg-ec2-palworld-spot` を指定（少なくとも 443/tcp 許可）  
+    6. ポリシーはデフォルト許可のまま → 「エンドポイントを作成」  
+    7. ルートは自動で作成されるため追加設定不要。作成完了を確認して次のエンドポイントを繰り返し作成する。
 - **セキュリティグループ (SG)**: 
   - EC2 用 SG (例: `sg-ec2-palworld-spot`):
     - Inbound: `8211/udp`（クライアント元）、`22/tcp`（管理端末）、EFS SG への `2049/tcp` は不要（アウトバウンドで許可するため）。
