@@ -51,10 +51,10 @@
      - インバウンドルール: 行1=タイプ「NFS」、ポート範囲=`2049`、送信元=`sg-ec2-palworld-spot`（プルダウンで SG を選択）  
      - アウトバウンドルール: デフォルトの「すべてのトラフィック」許可を残す  
      - タグ: `Name=sg-efs-palworld`, `Project=palworld`, `Env=prod` → 作成  
-  7. 作成後、**どの画面でどの SG を選ぶか**  
-     - Interface VPC エンドポイント: SG 選択欄で `sg-ec2-palworld-spot` を指定（443 が開いているため）。  
-     - EFS マウントターゲット: 「ネットワーク」セクションのセキュリティグループ欄で `sg-efs-palworld` を指定。  
-     - EC2 起動/Launch Template: セキュリティグループ欄で `sg-ec2-palworld-spot` を指定。
+  7. 作成後、**どの画面でどの SG を選ぶか（操作手順付き）**  
+     - Interface VPC エンドポイント: 左メニュー「エンドポイント」→「エンドポイントを作成」→ サービス名 `ssm` などを選択 → 「VPC」=`pal-spot-vpc` を選択 → 「サブネット」を 2 つのプライベートにチェック → **「セキュリティグループ」欄で `sg-ec2-palworld-spot` をプルダウン選択**（https 443 が開いているため）→ 「エンドポイントを作成」。  
+     - EFS マウントターゲット: 左メニュー「EFS」→ 対象ファイルシステムを開く → 右上「ネットワーク」タブ → 「マウントターゲットを編集」または作成ウィザードの「ネットワーク」セクションで **「セキュリティグループ」欄に `sg-efs-palworld` をチェック** → サブネットはプライベート 2 つを選択 → 保存。  
+     - EC2 起動/Launch Template: 左メニュー「起動テンプレート」→「起動テンプレートの作成」→ 「ネットワーキング」セクションの **「セキュリティグループ」欄で `sg-ec2-palworld-spot` をチェック**（インスタンス起動画面でも同じ位置に表示される）→ 作成。起動時も同じ欄で SG を選択する。
 - **キーペア**: 初期セットアップ/障害対応用に作成（例: `palworld-admin-key`）。必要なら Session Manager 接続ができるので鍵レス運用も可。
   - 手順: 左メニュー「キーペア」→「キーペアを作成」→ 名前入力・ファイル形式 `pem` → 作成してダウンロードを安全に保管。
 - **IAM ロール**: EC2 インスタンスプロファイルに `AmazonSSMManagedInstanceCore`、`AmazonElasticFileSystemClientFullAccess`、必要なら S3 読取/CloudWatch Logs 出力を付与。スポット運用に揃える場合は `PalworldSpotInstanceRole` を共用。
