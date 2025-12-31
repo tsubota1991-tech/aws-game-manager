@@ -40,13 +40,17 @@
     - Inbound: `8211/udp`（クライアント元）、`22/tcp`（管理端末）、EFS SG への `2049/tcp` は不要（アウトバウンドで許可するため）。
     - Outbound: デフォルト許可、または EFS SG 宛 `2049/tcp` と `0.0.0.0/0`（NAT 経由の更新/ダウンロード用）。
   - EFS 用 SG (例: `sg-efs-palworld`): Inbound に EC2 SG からの `2049/tcp`、Outbound はデフォルト許可。
+- SG 作成手順（例）: 左メニュー「セキュリティグループ」→「セキュリティグループを作成」→ VPC に `pal-spot-vpc` を選択 → インバウンド/アウトバウンドを上記のとおり入力 → タグ `Project=palworld`,`Env=prod` → 作成。
 - **キーペア**: 初期セットアップ/障害対応用に作成（例: `palworld-admin-key`）。必要なら Session Manager 接続ができるので鍵レス運用も可。
+  - 手順: 左メニュー「キーペア」→「キーペアを作成」→ 名前入力・ファイル形式 `pem` → 作成してダウンロードを安全に保管。
 - **IAM ロール**: EC2 インスタンスプロファイルに `AmazonSSMManagedInstanceCore`、`AmazonElasticFileSystemClientFullAccess`、必要なら S3 読取/CloudWatch Logs 出力を付与。スポット運用に揃える場合は `PalworldSpotInstanceRole` を共用。
+  - 手順: 左メニュー「IAM」→「ロール」→「ロールを作成」→ 信頼されたエンティティ= **AWS のサービス**、ユースケース= **EC2** → ポリシー `AmazonSSMManagedInstanceCore`、`AmazonElasticFileSystemClientFullAccess`（必要に応じ CloudWatch/S3 読取）を選択 → ロール名 `PalworldSpotInstanceRole` → 作成。
 
-## 2. EFS の準備
-- **EFS ファイルシステム**: パフォーマンス `General Purpose`、スループット `Bursting` (負荷が高い場合は `Provisioned` も検討)。
-- **マウントターゲット**: 利用する各 AZ のプライベートサブネットに作成。
-- **セキュリティグループ**: EC2 からの `2049/tcp` を許可する SG をアタッチ。
+## 2. EFS の準備（コンソール手順）
+- **EFS ファイルシステム作成**: 左メニュー「EFS」→「ファイルシステムの作成」→ 名前タグ `palworld-efs` → パフォーマンス `General Purpose`、スループット `Bursting` (負荷が高い場合は `Provisioned` も検討) を選択。
+- **マウントターゲット設定**: 作成ウィザードの「ネットワーク」セクションで VPC=`pal-spot-vpc` を選択し、サブネットにプライベート2つ（`in-apne1a`, `in-apne1c`）を選択。セキュリティグループは `sg-efs-palworld` を指定。
+- **セキュリティグループ**: EC2 からの `2049/tcp` を許可する SG (`sg-efs-palworld`) をアタッチ。
+- **バックアップ (任意)**: 作成画面の「自動バックアップ」を ON にして日次バックアップを有効化可能。
 - **ディレクトリ構成 (例)**: `/efs/palworld/{world,save,game}`。
 
 ### EC2 でのマウント例
@@ -59,7 +63,18 @@ echo "fs-1234567890abcdef.efs.ap-northeast-1.amazonaws.com:/ /efs efs defaults,_
 sudo mount -a
 ```
 
-## 3. パルワールドサーバー導入 (EFS 利用)
+## 3. ベースEC2の起動（初回セットアップ）
+1. 左メニュー「インスタンス」→「インスタンスを起動」。
+2. AMI: Ubuntu（後でこのインスタンスを AMI 化する）。
+3. インスタンスタイプ: 検証 `t3.large`、本番準備で `c6i.large` など。
+4. キーペア: `palworld-admin-key` を選択。
+5. ネットワーク設定: VPC=`pal-spot-vpc`、サブネット=`in-apne1a`、自動割り当てパブリック IP=無効。
+6. セキュリティグループ: 既存の `sg-ec2-palworld-spot` を選択。
+7. IAM ロール: `PalworldSpotInstanceRole` を選択。
+8. ストレージ: ルート 30〜50GB gp3 を指定。
+9. 起動後、EFS マウント・パルワールド導入を実施し、動作確認が終わったら AMI 化する。
+
+## 4. パルワールドサーバー導入 (EFS 利用)
 - **前提パッケージ**: `curl`, `steamcmd`, `lib32gcc-s1` 等。
 - **SteamCMD インストール例**:
 ```bash
@@ -72,7 +87,7 @@ sudo apt install -y steamcmd
 - **ゲームサーバー配置**: EFS 上の `/efs/palworld/game` をワークディレクトリにし、`steamcmd +login anonymous +app_update 2394010 validate +quit` で展開。`/efs/palworld/save` に `Saved` ディレクトリを配置し、`GameUserSettings.ini` など設定ファイルを EFS へ置く。
 - **シンボリックリンク**: 必要に応じ、`/home/ubuntu/PalServer/Saved` などローカルパスを EFS の `/efs/palworld/save` へリンク。
 
-## 4. 自動起動設定例 (systemd)
+## 5. 自動起動設定例 (systemd)
 `/etc/systemd/system/palserver.service`:
 ```ini
 [Unit]
@@ -99,7 +114,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now palserver
 ```
 
-## 5. 動作確認と AMI 化
+## 6. 動作確認と AMI 化
 1. EFS マウント状態でサーバーが起動し、クライアントから接続できることを確認。
 2. `Saved` データが EFS に蓄積されることを確認。
 3. 不要ファイルを削除し、`/var/log/cloud-init.log` など機微を必要に応じて整理。
