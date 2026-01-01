@@ -27,12 +27,13 @@
     4. VPC: `pal-spot-vpc` を選択  
     5. ルートテーブル: `pal-spot-private-rt` をチェック  
     6. ポリシーはデフォルト許可のまま → 「エンドポイントを作成」  
+    - **補足 (SG との紐付け)**: Gateway 型はセキュリティグループを指定する欄がないため、ここでは SG を触りません。  
   - Interface 型（SSM/EC2Messages/SSMMessages/CloudWatchLogs/ECR api,dkr など、必要に応じて追加）  
     1. 同画面でサービス名を検索（例: `ssm`、`ec2messages`、`ssmmessages`、`logs`、`ecr.api`、`ecr.dkr`）を順に作成  
     2. タイプ「Interface」を選択  
     3. VPC: `pal-spot-vpc`  
     4. サブネット: プライベートサブネット 2 つ（`in-apne1a` と `in-apne1c`）をチェック  
-    5. セキュリティグループ: `sg-ec2-palworld-spot` を指定（インバウンド 8211/udp・22/tcp を許可）  
+    5. セキュリティグループ: `sg-ec2-palworld-spot` を指定（インバウンド 8211/udp・22/tcp を許可）—ここが後述の「どの画面でどの SG を選ぶか」で示す **既存 SG を選択する欄**。  
     6. ポリシーはデフォルト許可のまま → 「エンドポイントを作成」  
     7. ルートは自動で作成されるため追加設定不要。作成完了を確認して次のエンドポイントを繰り返し作成する。
 - **セキュリティグループ (SG) を画面の入力項目に紐付けて作成**  
@@ -51,8 +52,8 @@
      - インバウンドルール: 行1=タイプ「NFS」、ポート範囲=`2049`、送信元=`sg-ec2-palworld-spot`（プルダウンで SG を選択）  
      - アウトバウンドルール: デフォルトの「すべてのトラフィック」許可を残す  
      - タグ: `Name=sg-efs-palworld`, `Project=palworld`, `Env=prod` → 作成  
-  7. （ここまでで作成した 2 つの SG を「どこで選択するか」の作業フロー。**新しい SG を作成する手順ではなく、既に作成済みの SG を選択するだけ**）  
-     1) Interface VPC エンドポイントを作成するフロー  
+  7. （ここまでで作成した 2 つの SG を「どこで選択するか」の作業フロー。**新しい SG を作成する手順ではなく、既に作成済みの SG を選択するだけ**。上の「VPC エンドポイント（任意だが推奨）」で Interface 型を作成する際、ここに書いたとおり `sg-ec2-palworld-spot` を選ぶ）  
+     1) Interface VPC エンドポイントを作成するフロー（例: `com.amazonaws.ap-northeast-1.ssm` を作ると `vpce-xxxxxxxxssm` という名前で作成され、`pal-spot-vpc` に紐づく）  
         - 左メニュー「エンドポイント」→「エンドポイントを作成」→ **タイプ=AWS のサービス** → サービス名で `ssm` などを検索・選択。  
         - 入力欄: 「VPC」=`pal-spot-vpc` → 「サブネット」=プライベート 2 つ（`in-apne1a`/`in-apne1c`） → **「セキュリティグループ」=`sg-ec2-palworld-spot`** をプルダウン選択（443 を許可しているため Interface エンドポイントの https 通信に利用）。  
         - 「エンドポイントを作成」を押す。  
