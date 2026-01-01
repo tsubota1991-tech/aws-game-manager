@@ -29,6 +29,7 @@
     6. ポリシーはデフォルト許可のまま → 「エンドポイントを作成」  
     - **補足 (SG との紐付け)**: Gateway 型はセキュリティグループを指定する欄がないため、ここでは SG を触りません。  
   - Interface 型（SSM/EC2Messages/SSMMessages/CloudWatchLogs/ECR api,dkr など、必要に応じて追加）  
+    0. 画面最上部「名前タグ - オプション」に `Name=vpce-ssm-palworld` のようなタグを入れておくと一覧で識別しやすい（任意）。  
     1. 同画面でサービス名を検索（例: `ssm`、`ec2messages`、`ssmmessages`、`logs`、`ecr.api`、`ecr.dkr`）を順に作成  
     2. タイプ「Interface」を選択  
     3. VPC: `pal-spot-vpc`  
