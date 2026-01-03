@@ -88,6 +88,39 @@
                 </div>
 
                 <div class="mb-3">
+                    <label for="autoScalingInstanceTypes" class="form-label">
+                        オートスケーリング用インスタンスタイプ（複数選択可）
+                    </label>
+                    <select class="form-select"
+                            id="autoScalingInstanceTypes"
+                            name="autoScalingInstanceTypes"
+                            multiple
+                            size="6">
+                        <option th:each="type : ${availableInstanceTypes}"
+                                th:value="${type}"
+                                th:text="${type}"
+                                th:selected="${autoScalingInstanceTypes != null and autoScalingInstanceTypes.contains(type)}">
+                        </option>
+                    </select>
+                    <div class="form-text">
+                        起動テンプレートでは 1 つのインスタンスタイプしか指定できないため、ASG 側で複数候補を持たせるための設定です。
+                        複数選択（Ctrl/Cmd+クリック）で保存すると重複を除いたリストとして保持されます。
+                    </div>
+                    <label for="autoScalingInstanceTypesManual" class="form-label mt-2">
+                        候補リストにないタイプをカンマ区切りで入力
+                    </label>
+                    <input type="text"
+                           class="form-control"
+                           id="autoScalingInstanceTypesManual"
+                           name="autoScalingInstanceTypesManual"
+                           th:value="${autoScalingInstanceTypesJoined}"
+                           placeholder="c6i.large,m6i.large,r6i.large">
+                    <div class="form-text">
+                        ここで入力した値は上の選択結果とマージされ、重複は自動で削除されます。
+                    </div>
+                </div>
+
+                <div class="mb-3">
                     <label for="discordBotToken" class="form-label">Discord Bot Token</label>
                     <input type="text"
                            class="form-control"
