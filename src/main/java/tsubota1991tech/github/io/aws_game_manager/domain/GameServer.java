@@ -33,6 +33,17 @@ public class GameServer {
     private String ec2InstanceId;
 
     /**
+     * Auto Scaling Group 名（ASG で起動する場合に使用）
+     */
+    @Column(length = 200)
+    private String autoScalingGroupName;
+
+    /**
+     * 起動時に設定する desired capacity（未設定の場合は1）
+     */
+    private Integer asgDesiredCapacity;
+
+    /**
      * スポットインスタンスとして運用するかどうか
      */
     @Column(nullable = false)
@@ -137,6 +148,22 @@ public class GameServer {
 
     public void setEc2InstanceId(String ec2InstanceId) {
         this.ec2InstanceId = ec2InstanceId;
+    }
+
+    public String getAutoScalingGroupName() {
+        return autoScalingGroupName;
+    }
+
+    public void setAutoScalingGroupName(String autoScalingGroupName) {
+        this.autoScalingGroupName = autoScalingGroupName;
+    }
+
+    public Integer getAsgDesiredCapacity() {
+        return asgDesiredCapacity;
+    }
+
+    public void setAsgDesiredCapacity(Integer asgDesiredCapacity) {
+        this.asgDesiredCapacity = asgDesiredCapacity;
     }
 
     public Integer getPort() {

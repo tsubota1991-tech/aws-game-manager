@@ -92,6 +92,9 @@ public class GameServerController {
         if (server.getAddressRefreshDelaySeconds() == null) {
             server.setAddressRefreshDelaySeconds(20);
         }
+        if (server.getAsgDesiredCapacity() == null) {
+            server.setAsgDesiredCapacity(1);
+        }
 
         gameServerRepository.save(server);
         redirectAttributes.addFlashAttribute("message", "GameServer を登録しました。");
@@ -134,6 +137,8 @@ public class GameServerController {
         server.setRegion(form.getRegion());
         server.setPort(form.getPort());
         server.setEc2InstanceId(form.getEc2InstanceId());
+        server.setAutoScalingGroupName(form.getAutoScalingGroupName());
+        server.setAsgDesiredCapacity(form.getAsgDesiredCapacity());
         server.setSpotInstance(form.isSpotInstance());
         server.setStartScriptPath(form.getStartScriptPath());
         server.setBackupScriptPath(form.getBackupScriptPath());
@@ -158,6 +163,9 @@ public class GameServerController {
         }
         if (server.getAddressRefreshDelaySeconds() == null) {
             server.setAddressRefreshDelaySeconds(20);
+        }
+        if (server.getAsgDesiredCapacity() == null) {
+            server.setAsgDesiredCapacity(1);
         }
 
         gameServerRepository.save(server);

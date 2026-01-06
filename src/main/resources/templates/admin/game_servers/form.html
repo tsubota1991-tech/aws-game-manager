@@ -96,6 +96,20 @@
             <input id="ec2InstanceId" type="text" class="form-control" th:field="*{ec2InstanceId}">
         </div>
 
+        <div class="col-md-8">
+            <label class="form-label" for="autoScalingGroupName">Auto Scaling Group 名</label>
+            <input id="autoScalingGroupName" type="text" class="form-control"
+                   th:field="*{autoScalingGroupName}" placeholder="game-server-asg">
+            <div class="form-text">
+                指定した場合は ASG の desired capacity を調整して起動/停止します（スポット対応）。
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="asgDesiredCapacity">起動時 desired capacity</label>
+            <input id="asgDesiredCapacity" type="number" min="1" class="form-control"
+                   th:field="*{asgDesiredCapacity}" placeholder="1">
+        </div>
+
         <div class="col-md-12">
             <label class="form-label" for="cloudAccount">Cloud Account</label>
             <select id="cloudAccount" class="form-select" th:field="*{cloudAccount}">

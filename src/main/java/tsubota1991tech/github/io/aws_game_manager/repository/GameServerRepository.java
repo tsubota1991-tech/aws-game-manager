@@ -12,4 +12,8 @@ public interface GameServerRepository extends JpaRepository<GameServer, Long> {
     List<GameServer> findByGameType(String gameType);
 
     Optional<GameServer> findByName(String name);  // ★ これでOK
+
+    Optional<GameServer> findByEc2InstanceId(String ec2InstanceId);
+
+    Optional<GameServer> findByAutoScalingGroupName(String autoScalingGroupName);
 }

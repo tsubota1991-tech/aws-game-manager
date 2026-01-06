@@ -105,6 +105,8 @@ public class DataInitializer implements CommandLineRunner {
             server.setCloudAccount(account);
             server.setRegion(account.getDefaultRegion());
             server.setEc2InstanceId("InstanceId");
+            server.setAutoScalingGroupName("");
+            server.setAsgDesiredCapacity(1);
             server.setPort(26900);
             server.setDescription("ローカル開発用のテストサーバ");
             server.setLastStatus("UNKNOWN");

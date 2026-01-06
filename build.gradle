@@ -29,6 +29,8 @@ dependencies {
 
     // AWS SDK
     implementation 'software.amazon.awssdk:ec2:2.38.7'
+    implementation 'software.amazon.awssdk:autoscaling:2.38.7'
+    implementation 'software.amazon.awssdk:sqs:2.38.7'
     implementation 'software.amazon.awssdk:ssm:2.38.7'
 
     // Discord Bot (JDA)

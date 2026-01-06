@@ -8,6 +8,16 @@ app:
     # 必須。systemd の Environment=APP_ENCRYPTION_SECRET=... で渡している値を使う
     secret: ${APP_ENCRYPTION_SECRET:}
 
+spot-interruption:
+  enabled: ${SPOT_INTERRUPTION_ENABLED:false}
+  queue-url: ${SPOT_INTERRUPTION_SQS_URL:}
+  region: ${SPOT_INTERRUPTION_REGION:ap-northeast-1}
+  access-key-id: ${SPOT_INTERRUPTION_ACCESS_KEY_ID:}
+  secret-access-key: ${SPOT_INTERRUPTION_SECRET_ACCESS_KEY:}
+  wait-seconds: ${SPOT_INTERRUPTION_WAIT_SECONDS:20}
+  poll-interval-ms: ${SPOT_INTERRUPTION_POLL_INTERVAL_MS:5000}
+  dedup-seconds: ${SPOT_INTERRUPTION_DEDUP_SECONDS:300}
+
 spring:
   datasource:
     # ★ 優先：SPRING_DATASOURCE_URL（systemdのEnvironmentで渡しているやつ）
