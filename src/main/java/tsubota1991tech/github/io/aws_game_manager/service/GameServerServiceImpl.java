@@ -477,6 +477,7 @@ public class GameServerServiceImpl implements GameServerService {
                             .autoScalingGroupName(server.getAutoScalingGroupName())
                             .desiredCapacity(0)
                             .minSize(0)
+                            .maxSize(0)
                             .build()
             );
 
