@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import software.amazon.awssdk.services.autoscaling.AutoScalingClient;
@@ -120,22 +121,36 @@ public class SpotInterruptionSqsListener {
 
     private boolean processMessage(SqsClient sqsClient, Message message) {
         try {
-            SpotInterruptionEvent event = objectMapper.readValue(message.body(), SpotInterruptionEvent.class);
+            JsonNode root = objectMapper.readTree(message.body());
+            String detailType = root.path("detail-type").asText();
 
-            if (!"aws.ec2".equals(event.getSource())
-                    || !"EC2 Spot Instance Interruption Warning".equals(event.getDetailType())) {
-                return true;
-            }
-            if (event.getDetail() == null || !StringUtils.hasText(event.getDetail().getInstanceId())) {
-                return true;
-            }
-            if (isDuplicate(event)) {
-                log.debug("Duplicated spot interruption event skipped. instanceId={} time={}",
-                        event.getDetail().getInstanceId(), event.getTime());
+            if (!StringUtils.hasText(detailType)) {
                 return true;
             }
 
-            handleInterruptionEvent(event);
+            if ("EC2 Spot Instance Interruption Warning".equals(detailType)) {
+                SpotInterruptionEvent event = objectMapper.treeToValue(root, SpotInterruptionEvent.class);
+                if (event.getDetail() == null || !StringUtils.hasText(event.getDetail().getInstanceId())) {
+                    return true;
+                }
+                if (isDuplicate(buildDedupKey(detailType, event.getDetail().getInstanceId(), event.getTime()))) {
+                    log.debug("Duplicated spot interruption event skipped. instanceId={} time={}",
+                            event.getDetail().getInstanceId(), event.getTime());
+                    return true;
+                }
+                handleInterruptionEvent(event);
+                return true;
+            }
+
+            if ("EC2 Instance State-change Notification".equals(detailType)) {
+                return handleInstanceStateChange(root, detailType);
+            }
+
+            if ("EC2 Instance Launch Successful".equals(detailType)
+                    || "EC2 Instance Terminate Successful".equals(detailType)) {
+                return handleAutoScalingLifecycle(root, detailType);
+            }
+
             return true;
         } catch (Exception e) {
             log.warn("SQS メッセージの処理に失敗しました。messageId={}", message.messageId(), e);
@@ -146,6 +161,10 @@ public class SpotInterruptionSqsListener {
     private void handleInterruptionEvent(SpotInterruptionEvent event) {
         String instanceId = event.getDetail().getInstanceId();
         GameServer server = resolveGameServer(instanceId);
+
+        if (server != null && !server.isSpotInstance()) {
+            return;
+        }
 
         StringBuilder message = new StringBuilder();
         message.append("🚨 Spot中断の2分前通知\n");
@@ -161,18 +180,96 @@ public class SpotInterruptionSqsListener {
         }
         message.append("イベント時刻: ").append(event.getTime());
 
-        if (discordBotManager.isRunning()) {
-            discordBotManager.sendMessageToDefaultChannel(message.toString());
-        } else {
-            log.info("Discord Bot が停止しているため、Spot中断通知をログのみに出力しました: {}", message);
-        }
+        sendDiscordMessage(message.toString(), "Spot中断通知");
     }
 
-    private boolean isDuplicate(SpotInterruptionEvent event) {
-        if (event.getTime() == null || event.getDetail() == null) {
+    private boolean handleInstanceStateChange(JsonNode root, String detailType) {
+        JsonNode detail = root.path("detail");
+        String instanceId = detail.path("instance-id").asText();
+        String state = detail.path("state").asText();
+        Instant time = parseEventTime(root);
+
+        if (!StringUtils.hasText(instanceId) || !StringUtils.hasText(state)) {
+            return true;
+        }
+        if (isDuplicate(buildDedupKey(detailType, instanceId, time))) {
+            return true;
+        }
+
+        GameServer server = resolveGameServer(instanceId);
+        if (server == null || !server.isSpotInstance()) {
+            return true;
+        }
+
+        String stateLabel;
+        switch (state) {
+            case "running":
+                stateLabel = "起動";
+                break;
+            case "stopped":
+                stateLabel = "停止";
+                break;
+            case "terminated":
+                stateLabel = "終了";
+                break;
+            default:
+                stateLabel = state;
+                break;
+        }
+
+        StringBuilder message = new StringBuilder();
+        message.append("📣 インスタンス状態変更通知\n");
+        message.append("ゲームサーバ: `").append(server.getName()).append("`\n");
+        if (StringUtils.hasText(server.getAutoScalingGroupName())) {
+            message.append("ASG: `").append(server.getAutoScalingGroupName()).append("`\n");
+        }
+        message.append("Instance ID: `").append(instanceId).append("`\n");
+        message.append("状態: `").append(stateLabel).append("`\n");
+        if (time != null) {
+            message.append("イベント時刻: ").append(time);
+        }
+
+        sendDiscordMessage(message.toString(), "状態変更通知");
+        return true;
+    }
+
+    private boolean handleAutoScalingLifecycle(JsonNode root, String detailType) {
+        JsonNode detail = root.path("detail");
+        String instanceId = detail.path("EC2InstanceId").asText();
+        String asgName = detail.path("AutoScalingGroupName").asText();
+        Instant time = parseEventTime(root);
+
+        if (!StringUtils.hasText(instanceId) || !StringUtils.hasText(asgName)) {
+            return true;
+        }
+        if (isDuplicate(buildDedupKey(detailType, instanceId, time))) {
+            return true;
+        }
+
+        GameServer server = resolveGameServer(instanceId, asgName);
+        if (server == null || !server.isSpotInstance()) {
+            return true;
+        }
+
+        String actionLabel = detailType.contains("Launch") ? "起動" : "停止";
+
+        StringBuilder message = new StringBuilder();
+        message.append("📣 ASG インスタンス").append(actionLabel).append("通知\n");
+        message.append("ゲームサーバ: `").append(server.getName()).append("`\n");
+        message.append("ASG: `").append(asgName).append("`\n");
+        message.append("Instance ID: `").append(instanceId).append("`\n");
+        if (time != null) {
+            message.append("イベント時刻: ").append(time);
+        }
+
+        sendDiscordMessage(message.toString(), "ASG通知");
+        return true;
+    }
+
+    private boolean isDuplicate(String key) {
+        if (!StringUtils.hasText(key)) {
             return false;
         }
-        String key = event.getDetail().getInstanceId() + "|" + event.getTime();
         Instant now = Instant.now();
 
         Instant previous = dedupCache.get(key);
@@ -182,6 +279,23 @@ public class SpotInterruptionSqsListener {
 
         dedupCache.put(key, now);
         return false;
+    }
+
+    private String buildDedupKey(String detailType, String instanceId, Instant time) {
+        String timeKey = time != null ? time.toString() : "unknown";
+        return detailType + "|" + instanceId + "|" + timeKey;
+    }
+
+    private Instant parseEventTime(JsonNode root) {
+        String timeValue = root.path("time").asText();
+        if (!StringUtils.hasText(timeValue)) {
+            return null;
+        }
+        try {
+            return Instant.parse(timeValue);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private void cleanupDedup() {
@@ -230,5 +344,26 @@ public class SpotInterruptionSqsListener {
             }
         }
         return null;
+    }
+
+    private GameServer resolveGameServer(String instanceId, String asgName) {
+        if (StringUtils.hasText(asgName)) {
+            Optional<GameServer> byAsg = gameServerRepository.findByAutoScalingGroupName(asgName);
+            if (byAsg.isPresent()) {
+                GameServer server = byAsg.get();
+                server.setEc2InstanceId(instanceId);
+                gameServerRepository.save(server);
+                return server;
+            }
+        }
+        return resolveGameServer(instanceId);
+    }
+
+    private void sendDiscordMessage(String message, String logLabel) {
+        if (discordBotManager.isRunning()) {
+            discordBotManager.sendMessageToDefaultChannel(message);
+        } else {
+            log.info("Discord Bot が停止しているため、{}をログのみに出力しました: {}", logLabel, message);
+        }
     }
 }

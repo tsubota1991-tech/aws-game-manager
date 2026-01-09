@@ -326,7 +326,8 @@ public class GameServerServiceImpl implements GameServerService {
     private void startServerWithAutoScaling(GameServer server, CloudAccount account) {
         enforceRestartCooldown(server);
 
-        try (AutoScalingClient autoScaling = awsClientFactory.createAutoScalingClient(account)) {
+        try (AutoScalingClient autoScaling = awsClientFactory.createAutoScalingClient(account);
+             Ec2Client ec2 = awsClientFactory.createEc2Client(account)) {
 
             AutoScalingGroup group = fetchAutoScalingGroup(autoScaling, server);
             int desired = Optional.ofNullable(server.getAsgDesiredCapacity())
