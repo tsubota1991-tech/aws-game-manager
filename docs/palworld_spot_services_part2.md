@@ -5,7 +5,7 @@
 ## 1. Auto Scaling Group (ASG) の設定
 - **名前**: `palworld-spot-asg`
 - **起動テンプレート**: `palworld-spot-lt-v1`、`Version: Latest`
-- **サブネット**: `subnet-xxxxxxxx_apne1a_private`, `subnet-yyyyyyyy_apne1c_private` を指定
+- **サブネット**: `subnet-xxxxxxxx_apne1a_public`, `subnet-yyyyyyyy_apne1c_public` を指定
 - **キャパシティ**: `Desired=1`, `Min=0`, `Max=2`（ピークに合わせ調整）
 - **Mixed Instances Policy**:
   - `OnDemandPercentageAboveBaseCapacity=0`（全スポット）
@@ -28,7 +28,10 @@
 - **メタデータ監視**: インスタンス内で 30 秒毎に `http://169.254.169.254/latest/meta-data/spot/instance-action` を監視する systemd サービス/cron を配置。
 - **Graceful Shutdown の例 (擬似コード)**:
   - 中断通知を検知 → 管理 API/CLI でプレイヤー通知 → `/efs/palworld/save` を同期（必要なら S3 へ） → `systemctl stop palserver`。
-- **CloudWatch Events (EventBridge)**: `EC2 Spot Instance Interruption Warning` イベントで Lambda を起動し、Discord/SNS へ通知。Lambda から SSM Run Command で上記停止スクリプトを実行する構成も有効。
+- **EventBridge → SQS → アプリ通知**:
+  - ルール: `EC2 Spot Instance Interruption Warning` を SQS に送信。
+  - 追加ルール: `EC2 Instance State-change Notification` / `EC2 Instance Launch Successful` / `EC2 Instance Terminate Successful` を同じ SQS に送信。
+  - アプリ側でイベント種別を判定し、Discord に通知する。
 
 ## 3. 監視と復旧
 - **CloudWatch Alarm**: 
@@ -52,16 +55,42 @@
 - ゲームサーバー登録/編集画面で対象サーバーに「スポット運用」フラグを設定。
 - フラグが ON のサーバーは、起動・停止時に上記 ASG/LT を使用する運用手順に合わせる。
 
-## 3. 運用フロー例
+## 3. SQS アクセスポリシーの更新（同一キュー流用時）
+Spot 中断通知と状態変更通知を同じ SQS キューで受ける場合、SQS のアクセスポリシーに EventBridge ルール ARN を追加する。
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowEventBridgeToSend",
+      "Effect": "Allow",
+      "Principal": { "Service": "events.amazonaws.com" },
+      "Action": "sqs:SendMessage",
+      "Resource": "arn:aws:sqs:ap-northeast-1:474623670615:spot-interruption-queue",
+      "Condition": {
+        "ArnEquals": {
+          "aws:SourceArn": [
+            "arn:aws:events:ap-northeast-1:474623670615:rule/spot-interruption-to-sqs",
+            "arn:aws:events:ap-northeast-1:474623670615:rule/asg-state-to-sqs"
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+## 4. 運用フロー例
 1. システム設定でスポット運用を有効化。
 2. 対象サーバーの「スポット運用」フラグを ON。
 3. 管理画面から起動指示 → AWS 側では ASG Desired を 1 に変更（または起動 API が LT/ASG を呼び出す実装）。
 4. 停止指示 → ASG Desired を 0 に戻す。中断通知を検知した際も停止スクリプトが EFS へセーブ。
 
-## 4. 推奨タグ設計
+## 5. 推奨タグ設計
 - `Name=palworld-spot`、`Project=palworld`、`Env=prod`、`Owner=ops-team` 等を LT/ASG/EC2/EFS/S3 に共通付与し、コスト配分と運用可視化を行う。
 
-## 5. テストチェックリスト
+## 6. テストチェックリスト
 - 起動: ASG Desired=1 でインスタンスが起動し、EFS マウント済みでサーバーが自動起動する。
 - 接続: クライアントから `8211/udp` で接続できる。
 - 中断: Spot 中断通知を模擬 (`aws ec2 send-spot-instance-interruptions`) し、セーブ＆停止が実行される。

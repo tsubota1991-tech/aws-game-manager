@@ -45,7 +45,40 @@
 - Spot Instance interruption notice（2分前通知）を受け取るために、
   - インスタンス内でメタデータ（`http://169.254.169.254/latest/meta-data/spot/instance-action`）を監視し、
   - 必要に応じてゲームサーバーのセッション切断通知やセーブ処理を行うスクリプトを準備。
-- SNS や Slack 連携で中断通知をチームに送信。
+- EventBridge → SQS → 本アプリで中断通知・ASG/EC2の状態変更通知を受け取り、Discord に通知する。
+
+### EventBridge → SQS 通知の追加ルール（同一キュー流用時）
+Spot 中断通知と合わせて ASG/EC2 の状態変更を同一キューに流す場合、EventBridge ルールを追加し、SQS アクセスポリシーの `aws:SourceArn` に複数ルール ARN を許可します。
+
+例: `spot-interruption-to-sqs` と `asg-state-to-sqs` を許可する場合
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowEventBridgeToSend",
+      "Effect": "Allow",
+      "Principal": { "Service": "events.amazonaws.com" },
+      "Action": "sqs:SendMessage",
+      "Resource": "arn:aws:sqs:ap-northeast-1:474623670615:spot-interruption-queue",
+      "Condition": {
+        "ArnEquals": {
+          "aws:SourceArn": [
+            "arn:aws:events:ap-northeast-1:474623670615:rule/spot-interruption-to-sqs",
+            "arn:aws:events:ap-northeast-1:474623670615:rule/asg-state-to-sqs"
+          ]
+        }
+      }
+    }
+  ]
+}
+```
+
+対応イベント例:
+- `EC2 Spot Instance Interruption Warning`
+- `EC2 Instance State-change Notification`
+- `EC2 Instance Launch Successful` / `EC2 Instance Terminate Successful`
 
 ### 本システムとの連携ポイント
 - 管理画面でサーバーに「スポット運用」を指定した場合でも、上記のようにAWS側でスポット用のLaunch Template/ASGが構成済みであることが前提です。
