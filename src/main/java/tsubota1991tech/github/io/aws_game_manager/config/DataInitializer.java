@@ -133,5 +133,6 @@ public class DataInitializer implements CommandLineRunner {
     private void initSystemSettings() {
         systemSettingService.ensureSettingExists(SystemSettingService.DISCORD_BOT_TOKEN_KEY, "");
         systemSettingService.ensureSettingExists(SystemSettingService.SPOT_OPERATION_ENABLED_KEY, "false");
+        systemSettingService.ensureSettingExists(SystemSettingService.AUTO_SCALING_INSTANCE_TYPES_KEY, "");
     }
 }

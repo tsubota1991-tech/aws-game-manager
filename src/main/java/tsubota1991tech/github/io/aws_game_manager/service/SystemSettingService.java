@@ -1,6 +1,9 @@
 package tsubota1991tech.github.io.aws_game_manager.service;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +18,7 @@ public class SystemSettingService {
 
     public static final String DISCORD_BOT_TOKEN_KEY = "DISCORD_BOT_TOKEN";
     public static final String SPOT_OPERATION_ENABLED_KEY = "SPOT_OPERATION_ENABLED";
+    public static final String AUTO_SCALING_INSTANCE_TYPES_KEY = "AUTO_SCALING_INSTANCE_TYPES";
 
     private final SystemSettingRepository systemSettingRepository;
     private final EncryptionService encryptionService;
@@ -35,6 +39,19 @@ public class SystemSettingService {
         return Boolean.parseBoolean(getSettingValue(SPOT_OPERATION_ENABLED_KEY));
     }
 
+    @Transactional(readOnly = true)
+    public List<String> getAutoScalingInstanceTypes() {
+        String raw = getSettingValue(AUTO_SCALING_INSTANCE_TYPES_KEY);
+        if (!StringUtils.hasText(raw)) {
+            return List.of();
+        }
+
+        return Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .toList();
+    }
+
     @Transactional
     public void updateDiscordBotToken(String token) {
         upsertSetting(DISCORD_BOT_TOKEN_KEY, encryptIfNeeded(token));
@@ -43,6 +60,21 @@ public class SystemSettingService {
     @Transactional
     public void updateSpotOperationEnabled(boolean enabled) {
         upsertSetting(SPOT_OPERATION_ENABLED_KEY, String.valueOf(enabled));
+    }
+
+    @Transactional
+    public void updateAutoScalingInstanceTypes(List<String> instanceTypes) {
+        if (instanceTypes == null || instanceTypes.isEmpty()) {
+            upsertSetting(AUTO_SCALING_INSTANCE_TYPES_KEY, "");
+            return;
+        }
+
+        String joined = instanceTypes.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.joining(","));
+        upsertSetting(AUTO_SCALING_INSTANCE_TYPES_KEY, joined);
     }
 
     @Transactional
