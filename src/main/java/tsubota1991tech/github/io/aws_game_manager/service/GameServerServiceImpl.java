@@ -504,12 +504,10 @@ public class GameServerServiceImpl implements GameServerService {
 
         String backupScriptPath = server.getBackupScriptPath();
         if (!StringUtils.hasText(backupScriptPath)) {
-            server.setLastStatus("BACKUP SCRIPT NOT SET");
+            server.setLastStatus("BACKUP SKIPPED");
             gameServerRepository.save(server);
-            throw new GameServerOperationException(
-                    "バックアップスクリプトのパスが設定されていません。\n"
-                            + "Game Server 編集画面で backupScriptPath を設定してください。"
-            );
+            log.info("バックアップスクリプト未設定のため停止前バックアップをスキップします。serverId={}", server.getId());
+            return;
         }
 
         if (!StringUtils.hasText(server.getEc2InstanceId())) {
