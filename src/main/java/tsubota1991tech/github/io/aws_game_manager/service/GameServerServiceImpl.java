@@ -76,7 +76,8 @@ public class GameServerServiceImpl implements GameServerService {
                     "Cloud Account が設定されていません。ゲームサーバ編集画面で Cloud Account を選択してください。"
             );
         }
-        if (server.getEc2InstanceId() == null || server.getEc2InstanceId().isBlank()) {
+        if (!StringUtils.hasText(server.getAutoScalingGroupName())
+                && (server.getEc2InstanceId() == null || server.getEc2InstanceId().isBlank())) {
             throw new GameServerOperationException(
                     "EC2 Instance ID が設定されていません。ゲームサーバ編集画面で正しいインスタンスIDを入力してください。"
             );
