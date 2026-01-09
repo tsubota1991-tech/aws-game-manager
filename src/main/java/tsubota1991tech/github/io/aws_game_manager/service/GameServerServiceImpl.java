@@ -225,35 +225,6 @@ public class GameServerServiceImpl implements GameServerService {
         }
     }
 
-    private void enforceStatusCheckInterval(GameServer server) {
-        Integer intervalMinutes = Optional.ofNullable(server.getStatusCheckIntervalMinutes())
-                .filter(v -> v > 0)
-                .orElse(null);
-
-        if (intervalMinutes == null) {
-            return;
-        }
-
-        String lastStatus = server.getLastStatus();
-        if (lastStatus == null || !lastStatus.contains("RUNNING")) {
-            return;
-        }
-
-        LocalDateTime lastChecked = server.getLastStatusCheckedAt();
-        if (lastChecked == null) {
-            return;
-        }
-
-        LocalDateTime nextAllowed = lastChecked.plusMinutes(intervalMinutes);
-        if (LocalDateTime.now().isBefore(nextAllowed)) {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            throw new GameServerOperationException(
-                    "起動中の状態確認は" + intervalMinutes + "分間隔で実施してください。次回は "
-                            + nextAllowed.format(formatter) + " 以降に実行できます。"
-            );
-        }
-    }
-
     // ==========================
     // EC2 起動
     // ==========================
@@ -485,6 +456,7 @@ public class GameServerServiceImpl implements GameServerService {
             server.setLastStoppedAt(LocalDateTime.now());
             server.setPublicIp(null);
             server.setPublicDns(null);
+            server.setAsgStopCheckAt(LocalDateTime.now().plusMinutes(5));
 
             gameServerRepository.save(server);
 
@@ -562,8 +534,6 @@ public class GameServerServiceImpl implements GameServerService {
             return;
         }
 
-        enforceStatusCheckInterval(server);
-
         try (Ec2Client ec2 = awsClientFactory.createEc2Client(account)) {
             DescribeInstanceStatusRequest request = DescribeInstanceStatusRequest.builder()
                     .includeAllInstances(true)
@@ -612,8 +582,6 @@ public class GameServerServiceImpl implements GameServerService {
     }
 
     private void refreshStatusWithAutoScaling(GameServer server, CloudAccount account) {
-        enforceStatusCheckInterval(server);
-
         try (AutoScalingClient autoScaling = awsClientFactory.createAutoScalingClient(account);
              Ec2Client ec2 = awsClientFactory.createEc2Client(account)) {
 
@@ -628,6 +596,7 @@ public class GameServerServiceImpl implements GameServerService {
                 server.setPublicIp(null);
                 server.setPublicDns(null);
                 server.setLastStatusCheckedAt(LocalDateTime.now());
+                server.setAsgStopCheckAt(null);
                 gameServerRepository.save(server);
                 return;
             }
@@ -649,6 +618,7 @@ public class GameServerServiceImpl implements GameServerService {
             InstanceStateName stateName = instance.state().name();
             server.setLastStatus("STATUS " + stateName + " (ASG)");
             server.setLastStatusCheckedAt(LocalDateTime.now());
+            server.setAsgStopCheckAt(null);
 
             try {
                 updateInstanceAddress(ec2, server);

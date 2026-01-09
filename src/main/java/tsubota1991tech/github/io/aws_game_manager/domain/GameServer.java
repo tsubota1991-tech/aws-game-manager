@@ -81,6 +81,8 @@ public class GameServer {
     private LocalDateTime lastStartedAt;
     private LocalDateTime lastStoppedAt;
     private LocalDateTime lastStatusCheckedAt;
+    private LocalDateTime lastAutoStatusCheckedAt;
+    private LocalDateTime asgStopCheckAt;
 
     /**
      * 停止後に再起動を許可するまでの待機時間（分）
@@ -268,6 +270,22 @@ public class GameServer {
 
     public void setLastStatusCheckedAt(LocalDateTime lastStatusCheckedAt) {
         this.lastStatusCheckedAt = lastStatusCheckedAt;
+    }
+
+    public LocalDateTime getLastAutoStatusCheckedAt() {
+        return lastAutoStatusCheckedAt;
+    }
+
+    public void setLastAutoStatusCheckedAt(LocalDateTime lastAutoStatusCheckedAt) {
+        this.lastAutoStatusCheckedAt = lastAutoStatusCheckedAt;
+    }
+
+    public LocalDateTime getAsgStopCheckAt() {
+        return asgStopCheckAt;
+    }
+
+    public void setAsgStopCheckAt(LocalDateTime asgStopCheckAt) {
+        this.asgStopCheckAt = asgStopCheckAt;
     }
 
     public Integer getRestartCooldownMinutes() {

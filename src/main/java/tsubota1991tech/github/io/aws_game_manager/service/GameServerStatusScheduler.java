@@ -31,6 +31,11 @@ public class GameServerStatusScheduler {
     @Scheduled(fixedDelayString = "${app.scheduler.status-check.delay-ms:60000}")
     public void autoRefreshForRunningServers() {
         for (GameServer server : gameServerRepository.findAll()) {
+            if (shouldCheckAfterAsgStop(server)) {
+                refreshStatusOnce(server);
+                continue;
+            }
+
             Integer intervalMinutes = Optional.ofNullable(server.getStatusCheckIntervalMinutes())
                     .filter(v -> v > 0)
                     .orElse(null);
@@ -43,7 +48,7 @@ public class GameServerStatusScheduler {
                 continue;
             }
 
-            LocalDateTime baseline = Optional.ofNullable(server.getLastStatusCheckedAt())
+            LocalDateTime baseline = Optional.ofNullable(server.getLastAutoStatusCheckedAt())
                     .orElse(server.getLastStartedAt());
 
             if (baseline == null) {
@@ -57,6 +62,7 @@ public class GameServerStatusScheduler {
 
             try {
                 gameServerService.refreshStatus(server.getId());
+                updateLastAutoStatusCheckedAt(server.getId());
 
                 GameServer refreshed = gameServerRepository.findById(server.getId()).orElse(server);
                 String ip = refreshed.getPublicIp() != null ? refreshed.getPublicIp() : "不明";
@@ -82,6 +88,43 @@ public class GameServerStatusScheduler {
                 }
             }
         }
+    }
+
+    private boolean shouldCheckAfterAsgStop(GameServer server) {
+        LocalDateTime checkAt = server.getAsgStopCheckAt();
+        if (checkAt == null) {
+            return false;
+        }
+        return !LocalDateTime.now().isBefore(checkAt);
+    }
+
+    private void refreshStatusOnce(GameServer server) {
+        try {
+            gameServerService.refreshStatus(server.getId());
+            GameServer refreshed = gameServerRepository.findById(server.getId()).orElse(server);
+            refreshed.setAsgStopCheckAt(null);
+            gameServerRepository.save(refreshed);
+
+            String status = refreshed.getLastStatus() != null ? refreshed.getLastStatus() : "UNKNOWN";
+            if (discordBotManager.isRunning()) {
+                String message = "ASG 停止後の状態確認結果 📡\n"
+                        + "サーバー: `" + refreshed.getName() + "`\n"
+                        + "状態: `" + status + "`\n"
+                        + "確認時刻: " + LocalDateTime.now();
+                discordBotManager.sendMessageToDefaultChannel(message);
+            } else {
+                log.info("Discord Bot 非稼働のため停止後確認の通知をスキップしました。serverId={}", server.getId());
+            }
+        } catch (Exception ex) {
+            log.warn("ASG 停止後の状態確認に失敗しました。serverId={} name={}", server.getId(), server.getName(), ex);
+        }
+    }
+
+    private void updateLastAutoStatusCheckedAt(Long serverId) {
+        gameServerRepository.findById(serverId).ifPresent(refreshed -> {
+            refreshed.setLastAutoStatusCheckedAt(LocalDateTime.now());
+            gameServerRepository.save(refreshed);
+        });
     }
 
     private boolean shouldCheckWhileRunning(GameServer server) {
