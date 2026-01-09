@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.autoscaling.model.DescribeAutoScalingGrou
 import software.amazon.awssdk.services.autoscaling.model.LifecycleState;
 import software.amazon.awssdk.services.autoscaling.model.UpdateAutoScalingGroupRequest;
 import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.CancelSpotInstanceRequestsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeInstanceStatusRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeInstanceStatusResponse;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest;
@@ -452,6 +453,8 @@ public class GameServerServiceImpl implements GameServerService {
                             .build()
             );
 
+            cancelSpotRequestIfNeeded(ec2, server);
+
             server.setLastStatus("STOP REQUESTED (ASG)");
             server.setLastStoppedAt(LocalDateTime.now());
             server.setPublicIp(null);
@@ -468,6 +471,44 @@ public class GameServerServiceImpl implements GameServerService {
             throw new GameServerOperationException(
                     "Auto Scaling Group の停止に失敗しました。(HTTP "
                             + e.statusCode() + "): " + detail, e);
+        }
+    }
+
+    private void cancelSpotRequestIfNeeded(Ec2Client ec2, GameServer server) {
+        if (!server.isSpotInstance() || !StringUtils.hasText(server.getEc2InstanceId())) {
+            return;
+        }
+
+        try {
+            DescribeInstancesResponse response = ec2.describeInstances(
+                    DescribeInstancesRequest.builder()
+                            .instanceIds(server.getEc2InstanceId())
+                            .build()
+            );
+
+            if (response.reservations().isEmpty()
+                    || response.reservations().get(0).instances().isEmpty()) {
+                log.warn("Spot instance not found for cancel. instanceId={}", server.getEc2InstanceId());
+                return;
+            }
+
+            Instance instance = response.reservations().get(0).instances().get(0);
+            String spotRequestId = instance.spotInstanceRequestId();
+            if (!StringUtils.hasText(spotRequestId)) {
+                log.info("Spot request id not found for instanceId={}", server.getEc2InstanceId());
+                return;
+            }
+
+            ec2.cancelSpotInstanceRequests(
+                    CancelSpotInstanceRequestsRequest.builder()
+                            .spotInstanceRequestIds(spotRequestId)
+                            .build()
+            );
+            log.info("Cancelled spot request. instanceId={} spotRequestId={}",
+                    server.getEc2InstanceId(), spotRequestId);
+        } catch (Ec2Exception e) {
+            log.warn("Failed to cancel spot request. instanceId={}",
+                    server.getEc2InstanceId(), e);
         }
     }
 
